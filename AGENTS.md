@@ -1,8 +1,18 @@
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `apps/merchant/node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+# Repo layout (monorepo)
+
+Bun workspaces. **The root is context only** (`docs/`, `.planning/`, this file) — never put app code here.
+
+- `apps/merchant/` — merchant onboarding web page, Next.js 16 App Router + Tailwind v4. Kaleb's half. Layout comes from the Claude Design project "Merchant voice agent onboarding" (`Merchant Onboarding v3.dc.html` → `FrameQuiet2`); copy comes from `docs/merchant-page-design-brief.md` and is final. Demo content lives in `apps/merchant/lib/merchant-data.ts`.
+- `apps/consumer-bot/` — consumer Telegram bot, Bun + grammY, hardcoded shopper flow with simulated Visa checkout. The consumer pair's half.
+- Run from root: `bun run dev:merchant`, `bun run dev:bot`. Use `bun`, never npm/node.
+- GSD: `.planning/` is the roadmap/state; `/gsd-progress` to see where we are.
+
 
 # Hackathon context
 
