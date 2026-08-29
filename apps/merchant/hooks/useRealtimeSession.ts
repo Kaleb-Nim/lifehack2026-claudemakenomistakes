@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { ECHO_GRACE_MS } from "../lib/agent-script";
 
 export type SessionPhase = "idle" | "connecting" | "live" | "scripted";
-export type SessionFailure = null | "no_key" | "mint_failed" | "mic_denied" | "ice_failed" | "dropped" | "operator";
+export type SessionFailure = null | "no_key" | "no_context" | "mint_failed" | "mic_denied" | "ice_failed" | "dropped" | "operator";
 
 export interface RealtimeEvent {
   type: string;
@@ -161,6 +161,7 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
         try {
           const body = (await mintRes.json()) as { error?: string };
           if (body?.error === "no_key") reason = "no_key";
+          else if (body?.error === "no_context") reason = "no_context";
         } catch {
           // keep default reason
         }
