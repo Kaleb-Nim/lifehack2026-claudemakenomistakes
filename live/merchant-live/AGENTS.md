@@ -167,8 +167,37 @@ torn down, and a merchant cannot tell a slow import from a dead one.
 
 ## Still canned
 
-The fork did **not** make extraction real. `lib/canned-extracts.ts` still
-returns fixed card text; the live part is the catalogue write.
+## The onboarding UI is wired to it
+
+The drop bar used to call `simulateUpload()`, which only nudged the beat
+runner — nothing was read, nothing was stored. It now does real work:
+
+| Control | Path |
+|---|---|
+| Drop a file / **Upload files** | `POST /api/ingest/csv` (multipart) |
+| **Paste URL** | `POST /api/ingest/research` with a domain |
+| **Find my shop** | same, with the live transcript so far |
+
+`hooks/useIngest.ts` owns it and polls the research job; `IngestPanel` renders
+what landed, what is missing and the agent's follow-up question.
+
+Two things to preserve:
+
+- **The beat advances immediately, before the ingest finishes.** A crawl takes
+  a minute or more; the screen must not wait on it, or the demo stalls.
+- **`merchantName` is passed from `app/page.tsx`, not imported.** `MERCHANT`
+  reads plain env vars, so importing it into this Client Component would give
+  every field `undefined`. It falls back to `SHOP_NAME` so an unconfigured
+  deployment still publishes somewhere sane.
+
+Only spreadsheets are read on upload. A dropped photo or PDF advances the beat
+but is not extracted — that path is still canned.
+
+## Still canned
+
+The fork did **not** make photo or PDF extraction real. `lib/canned-extracts.ts`
+still returns fixed card text for those; the live paths are spreadsheet, URL
+and transcript.
 
 `lib/merchant-data.ts` and `lib/agent-script.ts` also still narrate Bizgram in
 the scripted onboarding conversation — the captions, transcript and agent

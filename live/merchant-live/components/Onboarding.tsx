@@ -15,6 +15,8 @@ import {
 import { CARD_STAGGER_MS } from "../lib/frame-timing";
 import { WORK_THINK_MS, WORK_THINK_TRACE } from "../lib/agent-script";
 import { useOnboardingState } from "../hooks/useOnboardingState";
+import { useIngest } from "../hooks/useIngest";
+import IngestPanel from "./IngestPanel";
 import { useBeatRunner } from "../lib/beat-runner";
 
 const MARK: Record<LogLine["mark"], string> = { ok: "✓", q: "?", flag: "!", struck: "✓" };
@@ -57,7 +59,7 @@ function useTypewriter(text: string | undefined, cps = 28) {
   return text ? text.slice(0, state.n) : "";
 }
 
-export default function Onboarding() {
+export default function Onboarding({ merchantName = "" }: { merchantName?: string }) {
   const { idx, frame, prev, live, setLive, reading, over, setOver, scale, go, logDelay, isOpen, toggle, setRepeatHandler } = useOnboardingState();
   // ?mode=scripted skips the session entirely (CONTEXT.md) — the backup recording path for
   // shoot day, so tapping the orb here must never attempt a mic/key/WebRTC handshake.
@@ -113,9 +115,46 @@ export default function Onboarding() {
   // "upload" signal (lib/beat-runner.ts fires the runner's tools and walks the cursor
   // itself); in scripted mode / before the orb is ever tapped it keeps the exact Phase 1
   // behaviour of jumping straight to State C.
-  const simulateUpload = () => {
+  // Keep the scripted beat moving, whatever the real ingest does: the screen
+  // should advance the moment files land, not when the crawl finishes.
+  const advanceBeat = () => {
     if (voice.phase === "live") { voice.notify("upload"); return; }
     if (idx < 2) go(2);
+  };
+
+  // The name products are filed under. Falls back to what the shop is called
+  // on screen, so an unconfigured deployment still publishes somewhere sane
+  // rather than refusing.
+  const ingestName = merchantName.trim() || SHOP_NAME;
+  const ingest = useIngest(ingestName);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+
+  const onPickFiles = () => fileInput.current?.click();
+
+  const onFiles = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    advanceBeat();
+    // Spreadsheets go through the mapper; anything else is a photo or PDF,
+    // which the reading path does not handle yet.
+    if (/\.(csv|tsv|txt)$/i.test(file.name) || file.type.includes("csv")) {
+      void ingest.uploadSpreadsheet(file);
+    }
+  };
+
+  const onPasteUrl = () => {
+    const entered = window.prompt("What's your shop's website address?");
+    if (!entered?.trim()) return;
+    advanceBeat();
+    void ingest.research({ domain: entered.trim() });
+  };
+
+  // Nothing uploaded and nothing typed — work out which shop they are from
+  // what they have said so far.
+  const onFindMyShop = () => {
+    const said = [...captionHistory, captionText].filter(Boolean).join(" ").trim();
+    advanceBeat();
+    void ingest.research(said ? { transcript: said } : { transcript: ingestName });
   };
 
   return (
@@ -311,19 +350,28 @@ export default function Onboarding() {
                 className={`drop-bar${over ? " over" : ""}`}
                 onDragOver={(e) => { e.preventDefault(); setOver(true); }}
                 onDragLeave={() => setOver(false)}
-                onDrop={(e) => { e.preventDefault(); setOver(false); simulateUpload(); }}
+                onDrop={(e) => { e.preventDefault(); setOver(false); onFiles(e.dataTransfer?.files ?? null); }}
               >
                 <Svg d={UPLOAD} size={24} stroke="var(--color-text)" w={1.7} />
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept=".csv,.tsv,.txt,text/csv"
+                  hidden
+                  onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }}
+                />
                 <div className="drop-text">Drop files here, paste your store link, or type it out</div>
                 <div className="drop-actions">
-                  <button className="btn-dark" onClick={simulateUpload}>Upload files</button>
-                  <button className="btn-outline" onClick={simulateUpload}>Paste URL</button>
+                  <button className="btn-dark" onClick={onPickFiles}>Upload files</button>
+                  <button className="btn-outline" onClick={onPasteUrl}>Paste URL</button>
+                  <button className="btn-outline" onClick={onFindMyShop}>Find my shop</button>
                   <div className="vsep" />
                   <button className="btn-type"><Svg d={TYPE} size={19} stroke="var(--color-text)" /><span>Type instead</span></button>
                 </div>
               </div>
             </div>
           )}
+          <IngestPanel {...ingest} onDismiss={ingest.reset} />
         </div>
       </div>
       <audio ref={audioRef} autoPlay hidden />
