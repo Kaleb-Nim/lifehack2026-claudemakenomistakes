@@ -315,8 +315,15 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     paid = orders_db.update_order_status(order_id, "paid")
     amount = f"{paid.get('currency', 'SGD')} {paid['amount_cents'] / 100:,.2f}"
+    # Say how it was authorised: a device with no enrolled biometric falls back
+    # to an explicit tap, and the receipt should not imply a passkey was used.
+    method = (
+        "passkey"
+        if payload.get("method") == "telegram_biometric"
+        else "manual confirmation"
+    )
     await message.reply_text(
-        "Payment authorised.\n"
+        f"Payment authorised by {method}.\n"
         f"{paid['product_name']} - {amount}\n"
         f"Merchant: {paid['merchant_name']}\n"
         f"Order {order_id}",
