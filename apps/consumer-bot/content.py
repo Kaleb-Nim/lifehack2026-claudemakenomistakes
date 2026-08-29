@@ -169,8 +169,8 @@ BUTTON_CUSTOMISE = "Customise"
 BUTTON_EDIT_CART = "Edit cart"
 BUTTON_CONTINUE_TO_VISA = "Continue to secure Visa"
 BUTTON_CANCEL_CHECKOUT = "Cancel checkout"
-BUTTON_TRACK_ORDER = "Track order"
-BUTTON_CANCEL_ORDER = "Cancel order"
+BUTTON_VIEW_TRANSACTIONS = "View transactions"
+BUTTON_CANCEL_TRANSACTION = "Cancel transaction"
 BUTTON_VIEW_RECEIPT = "View receipt"
 BUTTON_KEEP_ORDER = "Keep order"
 UNSUPPORTED_CATEGORY_PHONE = "Phones"
@@ -569,17 +569,26 @@ def order_text(
         f"Amount: <b>{money(cart_total(laptop, include_hub))}</b>\n"
         f"Order: <code>{ORDER_ID}</code>\n"
         f"Tracking: <code>{TRACKING_CODE}</code>\n"
-        f"<code>{MASKED_CARD}</code>\n\n"
-        "<b>Preparing</b>"
+        f"<code>{MASKED_CARD}</code>"
     )
     return f"{prefix}\n\n{text}" if prefix else text
 
 
-def tracking_text() -> str:
+def transactions_text(
+    laptop: Laptop,
+    include_hub: bool,
+    refund_initiated: bool = False,
+) -> str:
+    payment_state = "Refund initiated" if refund_initiated else "Paid"
     return (
-        "<b>ORDER TRACKING</b>\n"
-        f"Order <code>{ORDER_ID}</code> is currently <b>Preparing</b>.\n"
-        f"Tracking: <code>{TRACKING_CODE}</code>"
+        "<b>TRANSACTIONS</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"Transaction: <code>{ORDER_ID}</code>\n"
+        f"{MERCHANT_NAME}\n"
+        f"{cart_item_description(laptop, include_hub)}\n"
+        f"Amount: <b>{money(cart_total(laptop, include_hub))}</b>\n"
+        f"Payment: <b>{payment_state}</b>\n"
+        f"<code>{MASKED_CARD}</code>"
     )
 
 
@@ -604,7 +613,6 @@ def receipt_text(laptop: Laptop, include_hub: bool) -> str:
             f"Amount paid: <b>{money(cart_total(laptop, include_hub))}</b>",
             f"<code>{MASKED_CARD}</code>",
             f"Tracking: <code>{TRACKING_CODE}</code>",
-            "Status: <b>Preparing</b>",
         ]
     )
     return "\n".join(lines)

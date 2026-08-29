@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from telegram import InlineKeyboardMarkup, ReplyKeyboardRemove
+from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 import bot
 import content
@@ -231,7 +231,7 @@ class PaymentSafeguardTests(unittest.TestCase):
 
         self.assertEqual(session.step, flow.Step.ORDER_CONFIRMED)
         self.assertEqual(session.payment_status, flow.PaymentStatus.APPROVED)
-        self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
+        self.assertEqual(session.order_status, flow.OrderStatus.CONFIRMED)
         self.assertIn("Amount:", result.view.text)
         self.assertIn("S$1,310", result.view.text)
         self.assertIn("SG-NOVA-2048", result.view.text)
@@ -249,59 +249,62 @@ class PaymentSafeguardTests(unittest.TestCase):
 
 
 class OrderAndCancellationTests(unittest.TestCase):
-    def test_tracking_and_receipt_are_deterministic(self) -> None:
+    def test_transactions_list_has_paid_purchase_and_cancel_action(self) -> None:
         session = flow.Session()
         advance_to_order(session)
 
-        tracking = flow.handle_action(session, flow.TRACK_ORDER)
-        receipt = flow.handle_action(session, flow.VIEW_RECEIPT)
+        result = flow.handle_action(session, flow.VIEW_TRANSACTIONS)
 
-        self.assertIn("NE-2048", tracking.view.text)
-        self.assertIn("Preparing", tracking.view.text)
-        self.assertIn("SG-NOVA-2048", tracking.view.text)
-        self.assertIn("Amount paid:", receipt.view.text)
-        self.assertIn("S$1,310", receipt.view.text)
-        self.assertIn("Lenovo IdeaPad 5a 2-in-1", receipt.view.text)
-        self.assertIn("Visa ···· 4242", receipt.view.text)
-        self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
+        self.assertEqual(session.step, flow.Step.TRANSACTIONS)
+        self.assertIn("TRANSACTIONS", result.view.text)
+        self.assertIn("NE-2048", result.view.text)
+        self.assertIn("S$1,310", result.view.text)
+        self.assertIn("Paid", result.view.text)
+        self.assertNotIn("Preparing", result.view.text)
+        self.assertEqual(result.view.button_rows[0][0].action, flow.CANCEL_ORDER)
+        self.assertEqual(session.order_status, flow.OrderStatus.CONFIRMED)
 
     def test_cancellation_preview_does_not_cancel(self) -> None:
         session = flow.Session()
         advance_to_order(session)
+        flow.handle_action(session, flow.VIEW_TRANSACTIONS)
 
         result = flow.handle_action(session, flow.CANCEL_ORDER)
 
         self.assertEqual(session.step, flow.Step.CANCELLATION_PREVIEW)
-        self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
+        self.assertEqual(session.order_status, flow.OrderStatus.CONFIRMED)
         self.assertEqual(session.payment_status, flow.PaymentStatus.APPROVED)
         self.assertIn("No cancellation has happened yet", result.view.text)
 
     def test_free_text_cannot_confirm_cancellation(self) -> None:
         session = flow.Session()
         advance_to_order(session)
+        flow.handle_action(session, flow.VIEW_TRANSACTIONS)
         flow.handle_action(session, flow.CANCEL_ORDER)
 
         flow.handle_text(session, "Confirm cancellation")
 
         self.assertEqual(session.step, flow.Step.CANCELLATION_PREVIEW)
-        self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
+        self.assertEqual(session.order_status, flow.OrderStatus.CONFIRMED)
         self.assertEqual(session.payment_status, flow.PaymentStatus.APPROVED)
 
     def test_keep_order_preserves_approved_order(self) -> None:
         session = flow.Session()
         advance_to_order(session)
+        flow.handle_action(session, flow.VIEW_TRANSACTIONS)
         flow.handle_action(session, flow.CANCEL_ORDER)
 
         result = flow.handle_action(session, flow.KEEP_ORDER)
 
-        self.assertEqual(session.step, flow.Step.ORDER_CONFIRMED)
-        self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
+        self.assertEqual(session.step, flow.Step.TRANSACTIONS)
+        self.assertEqual(session.order_status, flow.OrderStatus.CONFIRMED)
         self.assertEqual(session.payment_status, flow.PaymentStatus.APPROVED)
         self.assertIn("order is unchanged", result.view.text)
 
     def test_explicit_cancellation_changes_state_and_refund(self) -> None:
         session = flow.Session()
         advance_to_order(session)
+        flow.handle_action(session, flow.VIEW_TRANSACTIONS)
         flow.handle_action(session, flow.CANCEL_ORDER)
 
         result = flow.handle_action(session, flow.CONFIRM_CANCELLATION)
@@ -317,6 +320,11 @@ class OrderAndCancellationTests(unittest.TestCase):
         self.assertIn("initiated", result.view.text)
         self.assertIn("RF-8821", result.view.text)
         self.assertIn("reversal, void, or refund", result.view.text)
+
+        transactions = flow.handle_action(session, flow.VIEW_TRANSACTIONS)
+        self.assertEqual(session.step, flow.Step.TRANSACTIONS)
+        self.assertIn("Refund initiated", transactions.view.text)
+        self.assertEqual(transactions.view.button_rows, ())
 
 
 class ResetAndIsolationTests(unittest.TestCase):
@@ -361,6 +369,37 @@ class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
             ],
             [flow.CONFIRM_WITH_PASSKEY],
         )
+
+        order_session = flow.Session(
+            step=flow.Step.ORDER_CONFIRMED,
+            payment_status=flow.PaymentStatus.APPROVED,
+            order_status=flow.OrderStatus.CONFIRMED,
+        )
+        transaction_markup = bot.telegram_markup(flow.current_view(order_session))
+        self.assertIsInstance(transaction_markup, InlineKeyboardMarkup)
+        self.assertEqual(
+            transaction_markup.inline_keyboard[0][0].callback_data,
+            flow.VIEW_TRANSACTIONS,
+        )
+
+        flow.handle_action(order_session, flow.VIEW_TRANSACTIONS)
+        cancel_markup = bot.telegram_markup(flow.current_view(order_session))
+        self.assertIsInstance(cancel_markup, InlineKeyboardMarkup)
+        self.assertEqual(
+            cancel_markup.inline_keyboard[0][0].callback_data,
+            flow.CANCEL_ORDER,
+        )
+
+        flow.handle_action(order_session, flow.CANCEL_ORDER)
+        with patch.object(
+            bot,
+            "current_mini_app_url",
+            return_value="https://example.test/confirm",
+        ):
+            cancellation_markup = bot.telegram_markup(flow.current_view(order_session))
+        self.assertIsInstance(cancellation_markup, ReplyKeyboardMarkup)
+        cancellation_url = cancellation_markup.keyboard[0][0].web_app.url
+        self.assertIn("action=cancel%3Aconfirm", cancellation_url)
 
     def test_session_store_is_independent_by_chat_and_user(self) -> None:
         first_chat: dict[object, object] = {}

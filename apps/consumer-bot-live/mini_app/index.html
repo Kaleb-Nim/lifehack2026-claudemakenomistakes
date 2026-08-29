@@ -173,6 +173,7 @@
       const label = query.get("confirmation_label");
       const productName = query.get("product_name");
       const action = query.get("action") || "visa:confirm";
+      const orderId = query.get("order_id") || null;
       const isCancellation = action === "cancel:confirm";
       const product = document.getElementById("product");
       const pageTitle = document.getElementById("page-title");
@@ -212,6 +213,10 @@
           status: "authorized",
           method,
           action,
+          // Identifies which Supabase order this authorization settles. The
+          // hardcoded demo bot had a single implicit session; here several
+          // orders can be in flight, so the payload must say which one.
+          order_id: orderId,
           confirmed_at: new Date().toISOString()
         }));
       }
@@ -263,11 +268,37 @@
         setStatus("Biometric access is disabled for Pluto. Open Telegram settings to enable it.");
       }
 
+      function biometricState(manager) {
+        if (!manager) return "no BiometricManager";
+        return [
+          `inited=${manager.isInited}`,
+          `available=${manager.isBiometricAvailable}`,
+          `requested=${manager.isAccessRequested}`,
+          `granted=${manager.isAccessGranted}`,
+          `type=${manager.biometricType || "none"}`
+        ].join(" · ");
+      }
+
       function refreshBiometricState(manager) {
-        if (!manager?.isInited) return;
-        if (!manager.isBiometricAvailable) {
+        // Every branch below must leave a status the shopper can act on. The
+        // button starts disabled, so a silent return strands them on a dead
+        // button with no explanation - which is indistinguishable from a bug.
+        if (!manager) {
           authenticationMode = "unavailable";
-          setStatus("Biometric authentication is unavailable on this device.", true);
+          setStatus("Biometric authentication is unavailable here.", true);
+          return;
+        }
+        if (!manager.isInited) {
+          setStatus("Preparing biometric authentication…", true);
+          return;
+        }
+        if (!manager.isBiometricAvailable) {
+          // Without a fallback a device with no enrolled biometric can never
+          // pay at all. An explicit tap is still explicit consent; it is
+          // reported as manual_confirmation so the bot can tell them apart.
+          authenticationMode = "manual";
+          button.textContent = label || "Confirm payment";
+          setStatus("No biometric set up on this device — confirm manually.");
           return;
         }
         if (manager.isAccessRequested && !manager.isAccessGranted) {
@@ -289,6 +320,10 @@
         if (authenticationMode === "settings") {
           manager.openSettings();
           setStatus("Enable biometric access, then return here to continue.");
+          return;
+        }
+        if (authenticationMode === "manual") {
+          completeAuthorization("manual_confirmation");
           return;
         }
         if (authenticationMode !== "native") return;
@@ -319,6 +354,16 @@
         button.addEventListener("click", requestAuthentication);
         manager.init(() => refreshBiometricState(manager));
         webApp.onEvent("biometricManagerUpdated", () => refreshBiometricState(manager));
+
+        // init() does not always fire its callback, and biometricManagerUpdated
+        // may never arrive, which previously left the button disabled forever
+        // with a stale "Checking…" message. Re-check, then surface the raw
+        // state so a stuck page says why it is stuck instead of doing nothing.
+        window.setTimeout(() => refreshBiometricState(manager), 1200);
+        window.setTimeout(() => {
+          if (authenticationMode === "native" || authenticationMode === "settings") return;
+          setStatus(`Biometrics unavailable — ${biometricState(manager)}`, true);
+        }, 3500);
       }
     </script>
   </body>
