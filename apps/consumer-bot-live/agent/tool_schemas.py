@@ -31,8 +31,17 @@ PRODUCT_DISCOVERY_TOOL = {
                 "maximum": 10,
                 "description": "Maximum result count. Use 5 unless needed otherwise.",
             },
+            "max_price_cents": {
+                "type": ["integer", "null"],
+                "minimum": 0,
+                "description": (
+                    "Budget ceiling in cents, or null if the shopper gave none. "
+                    "Set this whenever a budget is stated - text relevance alone "
+                    "cannot exclude over-budget products."
+                ),
+            },
         },
-        "required": ["query", "limit"],
+        "required": ["query", "limit", "max_price_cents"],
         "additionalProperties": False,
     },
     "strict": True,

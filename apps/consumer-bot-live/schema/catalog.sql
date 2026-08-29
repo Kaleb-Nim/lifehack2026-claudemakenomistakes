@@ -50,3 +50,23 @@ CREATE INDEX IF NOT EXISTS catalog_products_search_idx
         source_updated_at
     )
     WITH (key_field = 'id');
+
+-- Semantic half of product discovery. The BM25 index above covers the lexical
+-- half; tools/product_discovery.py fuses the two with reciprocal rank fusion.
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 1536 dims = OpenAI text-embedding-3-small. Changing the model means changing
+-- this dimension, which requires dropping the column and re-embedding.
+-- Nullable so rows can be imported before they are embedded.
+ALTER TABLE public.catalog_products
+    ADD COLUMN IF NOT EXISTS embedding VECTOR(1536);
+
+-- SHA-256 of the exact text that produced `embedding`, so a re-run re-embeds
+-- only rows whose searchable text actually changed.
+ALTER TABLE public.catalog_products
+    ADD COLUMN IF NOT EXISTS embedding_hash TEXT;
+
+-- Cosine distance (<=>) matches OpenAI's normalised embeddings.
+CREATE INDEX IF NOT EXISTS catalog_products_embedding_idx
+    ON public.catalog_products
+    USING hnsw (embedding vector_cosine_ops);

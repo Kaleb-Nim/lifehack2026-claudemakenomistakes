@@ -74,9 +74,7 @@ def create_order(
 
 def get_order(order_id: str) -> dict[str, Any] | None:
     """Fetch a single order by id, or None if it doesn't exist."""
-    response = (
-        get_client().table("orders").select("*").eq("id", order_id).execute()
-    )
+    response = get_client().table("orders").select("*").eq("id", order_id).execute()
     return response.data[0] if response.data else None
 
 
@@ -90,11 +88,5 @@ def update_order_status(
     update: dict[str, Any] = {"status": status}
     if cancellation_reason is not None:
         update["cancellation_reason"] = cancellation_reason
-    response = (
-        get_client()
-        .table("orders")
-        .update(update)
-        .eq("id", order_id)
-        .execute()
-    )
+    response = get_client().table("orders").update(update).eq("id", order_id).execute()
     return response.data[0]

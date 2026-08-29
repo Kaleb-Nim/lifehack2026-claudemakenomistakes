@@ -44,13 +44,26 @@ Telegram  <->  bot.py  <->  agent/core.py (OpenAI tool-calling loop)
 
 | Piece | State |
 |---|---|
-| `db/catalog_db.py` | Real connection + generic `execute()`. No typed search queries yet — schema on Railway needs confirming first. |
+| `db/catalog_db.py` | Real connection + generic `execute()`. Typed search lives in `tools/product_discovery.py`. |
 | `db/orders_db.py` | Real, full CRUD for `orders` (create/get/update status). |
-| `schema/orders.sql` | Real, but **not yet applied** to the live Supabase project — see below. |
+| `schema/orders.sql` | Real and **applied** to the live Supabase project. |
+| `schema/catalog.sql` | Real and applied. BM25 index + `embedding VECTOR(1536)` + HNSW cosine index. |
+| `tools/product_discovery.py` | **Implemented** — hybrid BM25 + pgvector, weighted RRF, budget filter. Degrades to lexical-only if the query can't be embedded. |
 | `tools/check_order_status.py`, `tools/cancel_order.py` | Implemented (thin wrappers over `orders_db`). Cancel's "notify merchant dashboard" half is a TODO — no merchant API exists yet. |
-| `tools/product_discovery.py`, `tools/buy_and_pay.py` | Stubs (`NotImplementedError`) — need the confirmed catalog schema / Mini App wiring respectively. |
+| `tools/buy_and_pay.py` | **Stub** (`NotImplementedError`) — needs Mini App wiring, plus the context gap below. |
 | `agent/core.py` | Implemented Responses API loop; dispatches all four tools. |
 | `bot.py` | Runs end-to-end and returns the agent reply. |
+
+**Catalogue data:** 209 products across two real SG merchants (Dynacore, Mansa
+Computers), loaded by `scripts/ingest_sg_catalog.py`, all embedded by
+`scripts/backfill_embeddings.py`. Re-run the backfill after any re-import; it
+only re-embeds rows whose text actually changed.
+
+**Known blocker for `buy_and_pay`:** `orders_db.create_order` requires
+`telegram_user_id` and `telegram_chat_id`, but the tool schema cannot supply
+them (the model must never invent user IDs) and `_run_tool` in `agent/core.py`
+does not inject them either. Thread them through from `_handle_message_locked`
+before implementing this tool.
 
 ## Working here concurrently
 
