@@ -196,6 +196,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .products { display: flex; flex-direction: column; }
 .product { display: flex; align-items: baseline; gap: 14px; padding: 10px 4px; border-bottom: 1px solid var(--color-neutral-300); animation: rise 0.4s ease-out both; }
 .product-name { flex: 1; min-width: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-tag { flex: none; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--color-neutral-200); color: var(--color-accent-700); white-space: nowrap; }
 .product-price { width: 74px; flex: none; text-align: right; font-size: 16px; font-weight: 500; }
 .product-stock { width: 74px; flex: none; text-align: right; font-size: 14px; color: var(--color-neutral-700); }
 

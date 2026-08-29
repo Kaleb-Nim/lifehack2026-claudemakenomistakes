@@ -2,13 +2,13 @@
 
 **Every surface must match this file.** Merchant onboarding (`apps/merchant`), consumer bot (`apps/consumer-bot`), the merchant payments dashboard (Claude Design), the pitch video and the demo video all draw their names, products and prices from here. If you need to change one, change it here first and tell the other owners.
 
-Last updated 2026-08-29.
+Last updated 2026-08-29. (Product name set to **Cashew** — the repo-wide rename; §1 previously said Pluto.)
 
 ---
 
 ## 1. Product name
 
-**Pluto.** Everywhere, including the agent's own voice ("Hi Pluto, help me list my products"). Never `[PRODUCT NAME]`, never any other spelling.
+**Cashew.** Everywhere, including the agent's own voice ("Hi Cashew, help me list my products"). Never `[PRODUCT NAME]`, never `Pluto`, never any other spelling.
 
 ## 2. The merchant
 
@@ -26,7 +26,7 @@ Last updated 2026-08-29.
 | Prices online | **None.** Customers must request the "Daily Bizgram Pricelist" by WhatsApp or email. | bizgram.com |
 | Sells | Laptops, desktops, servers, networking (Cisco, TP-Link), monitors, components, accessories | both |
 
-**That last row is the entire premise of the demo.** A shop with 10,000+ SKUs and not one public price is invisible to a shopping agent. Pluto fixes exactly that. Say it in those words.
+**That last row is the entire premise of the demo.** A shop with 10,000+ SKUs and not one public price is invisible to a shopping agent. Cashew fixes exactly that. Say it in those words.
 
 ### What is real and what is demo data
 
@@ -103,7 +103,7 @@ Paid subtotal $2,822 · held $1,049 · fees $59.26 · payout $2,762.74. **These 
 
 ### Order detail (10:12, for the click-through panel)
 
-ASUS Vivobook 15 (X1504VA) · $849 · −$50 student promo · Pluto chat
+ASUS Vivobook 15 (X1504VA) · $849 · −$50 student promo · Cashew chat
 Timeline: Paid in chat · Visa (10:12) → Confirmed to shopper (10:12) → Ready for collection (10:13)
 
 ## 6. Names retired

@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  HERO, LIVE_LINE, PRODUCTS, PRODUCT_NAME, SHOP_NAME,
+  CATALOGUE_COUNT, HERO, LIVE_LINE, PRODUCTS, PRODUCT_NAME, SHOP_NAME,
   type LogLine,
 } from "../lib/merchant-data";
 import { CARD_STAGGER_MS } from "../lib/frame-timing";
@@ -199,7 +199,7 @@ export default function Onboarding() {
                 <div className="hero">
                   <div className="hero-head">
                     <div className="hero-name">{HERO.name}</div>
-                    <div className="hero-price"><b>{HERO.price}</b><div className="hero-tag">{HERO.priceNote}</div></div>
+                    <div className="hero-price"><b>{HERO.price}</b></div>
                   </div>
                   <div className="hero-specs">{HERO.specs.map((s) => <div key={s}>{s}</div>)}</div>
                   <div className="hero-foot"><div>{HERO.stock}</div><div>{HERO.extra}</div></div>
@@ -209,6 +209,7 @@ export default function Onboarding() {
                   {PRODUCTS.map((p, i) => (
                     <div key={p.name} className="product" style={{ animationDelay: `${300 + i * 90}ms` }}>
                       <div className="product-name">{p.name}</div>
+                      {p.priceNote && <div className="product-tag">{p.priceNote}</div>}
                       <div className="product-price">{p.price}</div>
                       <div className="product-stock">{p.stock}</div>
                     </div>
@@ -226,7 +227,7 @@ export default function Onboarding() {
               <button className={`golive-btn${live ? " done" : ""}`} onClick={() => setLive(true)}>
                 {live ? `Live — shoppers can find ${SHOP_NAME}` : `Go live — shoppers can find ${SHOP_NAME}`}
               </button>
-              <div className="golive-note">11 products · readable by the shopping agent</div>
+              <div className="golive-note">{CATALOGUE_COUNT} products · readable by the shopping agent</div>
             </div>
           ) : (
             <div className="drop">

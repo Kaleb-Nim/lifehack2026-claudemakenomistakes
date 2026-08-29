@@ -1,5 +1,7 @@
 // Fixed demo content for the merchant onboarding page.
-// Copy is FINAL — taken verbatim from docs/merchant-page-design-brief.md §4 (recorded as voice; on-screen text must match).
+// SOURCE OF TRUTH: ../../docs/CANONICAL-DEMO-DATA.md — the product name (§1), the shop (§2)
+// and every product, price and stock figure (§3) come from there and nowhere else.
+// Prose/voice copy follows docs/merchant-page-design-brief.md §4, reconciled to the canonical data.
 // Shape mirrors merchant-data.js in the Claude Design project ("Merchant Onboarding v3" → FrameQuiet2).
 
 export type Mark = "ok" | "q" | "flag" | "struck";
@@ -17,7 +19,7 @@ export interface Card {
 }
 
 export interface Pill { label: string; primary?: boolean }
-export interface Product { name: string; price: string; stock: string }
+export interface Product { name: string; price: string; priceNote?: string; stock: string }
 
 export type Orb = "idle" | "speaking" | "listening";
 
@@ -39,10 +41,10 @@ export interface Frame {
   seconds: number;
 }
 
+// CANONICAL-DEMO-DATA.md §2: "Bizgram Asia Pte Ltd … ONE outlet, #05-50 Sim Lim Square."
 export const SHOP_NAME = "Bizgram Asia";
-// docs/CANONICAL-DEMO-DATA.md §1: "Pluto. Everywhere, including the agent's own voice.
-// Never `[PRODUCT NAME]`, never any other spelling."
-export const PRODUCT_NAME = "Pluto";
+// CANONICAL-DEMO-DATA.md §1: the product name, everywhere, including the agent's own voice.
+export const PRODUCT_NAME = "Cashew";
 
 const ok = (text: string): LogLine => ({ mark: "ok", text });
 const q = (text: string): LogLine => ({ mark: "q", text });
@@ -62,13 +64,13 @@ export const CARD_SITE: Card = {
 };
 
 export const CARD_PRICELIST: Card = {
-  file: "001 Bizgram Asia Pricelist August 29, 2026.pdf", what: "Price list · PDF, 9 pages", status: "6 laptops",
-  summary: "9 pages · 1,140 prices · 6 laptops · “cash or PayNow price”",
+  file: "001 Bizgram Asia Pricelist August 29, 2026.pdf", what: "Price list · PDF, 9 pages", status: "4 laptops",
+  summary: "9 pages · 1,140 prices · 4 laptops · “cash or PayNow price”",
   lines: [
     "p1  HDD 3.5\" SATA / SAS · NAS drives",
     "p2  AMD AM5 boards + CPU bundles",
     "p3  Radeon graphics cards",
-    "p7  LAPTOPS (Acer ×5, ASUS ×1) · SSD · RAM · accessories",
+    "p7  LAPTOPS (ASUS ×1, Acer ×2, Lenovo ×1) · SSD · RAM · router · accessories",
     "⚠ 1,100+ items are components — out of scope for “laptops first”",
   ].join("\n"),
 };
@@ -77,8 +79,8 @@ export const CARD_FLYER: Card = {
   file: "ACER-LAPTOP-OFFER-PROMO-SINGAPORE.pdf", what: "Supplier flyer · PDF, 6 pages", status: "promo expired", live: true,
   summary: "6 pages · 4 models with full specs · promo 1 Nov–31 Dec 2024",
   lines: [
-    "Swift Go 14 SFG14-73-56VK   CU5 125H · 16GB · 1TB · 2.8K OLED · 1.3kg   $1,349",
-    "Swift 14 AI SF14-51-552K    CU5 226V · 16GB · 512GB · OLED · 1.26kg     $1,499",
+    "Swift Go 14  SFG14-73-56VK   CU5 125H · 16GB · 512GB · 2.8K OLED · 1.3kg   $1,349",
+    "Aspire Go 15 AG15-31P        i3-N305 · 8GB · 256GB · 15.6\" FHD · 1.7kg     —",
     "warranty: “2 Years Carry-in”",
     "⚠ promo expired 31 Dec 2024 — flyer $1,349 ≠ price list $1,299",
   ].join("\n"),
@@ -87,10 +89,10 @@ export const CARD_FLYER: Card = {
 export const CARD_PHOTOS: Card = {
   file: "3 photos", what: "Photos from your phone", status: "3 photos read",
   thumbs: ["IMG_2201", "IMG_2202", "IMG_2203"],
-  summary: "shelf: 5 laptop boxes + tags · counter: “WhatsApp for price” + PayNow QR · shopfront: hours",
+  summary: "shelf: 4 laptop boxes + tags · counter: “WhatsApp for price” + PayNow QR · shopfront: hours",
   lines: [
-    "IMG_2201  boxes: Swift Go 14, Swift Go 14 Touch, Swift 14 AI, Swift Go 16, Aspire Go 15",
-    "          tags: $1,299 · $1,249 · $1,449 · $1,349 · $599 “display set”",
+    "IMG_2201  boxes: Vivobook 15, Swift Go 14, IdeaPad Slim 5, Aspire Go 15",
+    "          tags: $849 · $1,299 · $1,049 · $599 “display set”",
     "IMG_2202  “WhatsApp +65 8777 6955 for stock status, price, delivery” · PayNow UEN",
     "IMG_2203  “#05-50 · Open daily 10am–7.30pm incl. Sat/Sun/PH · No lunch break”",
   ].join("\n"),
@@ -112,16 +114,20 @@ const FLAG_1 = "Swift Go 14: flyer $1,349 (expired) vs price list $1,299 vs shel
 const FLAG_2 = "Price list says “cash or PayNow” — card price unknown";
 const FLAG_3 = "1,100+ component SKUs found — include or not?";
 
+// §3: 4 laptops (Vivobook 15, Swift Go 14, IdeaPad Slim 5, Aspire Go 15) + 6 accessories
+// (Archer AX55, 990 Pro, T7, Anker hub, MX Master 3S, Crucial DDR5) = the 10-item catalogue.
+const SCOPE_LINE = "4 laptops + 6 accessories in scope (price list p7 + shelf)";
+
 const LOG_C: LogLine[] = [
   ...LOG_B,
-  ok("6 laptops + 5 accessories in scope (price list p7 + shelf)"),
+  ok(SCOPE_LINE),
   flag(FLAG_1), flag(FLAG_2), flag(FLAG_3),
 ];
 
 // State D: the three ! lines resolve (struck) and four ✓ lines land.
 const LOG_D: LogLine[] = [
   ...LOG_B,
-  ok("6 laptops + 5 accessories in scope (price list p7 + shelf)"),
+  ok(SCOPE_LINE),
   struck(FLAG_1), struck(FLAG_2), struck(FLAG_3),
   ok("Scope: laptops + accessories (components excluded for now)"),
   ok("Source priority: price list > shelf tag > flyer (specs only) > website (names only)"),
@@ -131,7 +137,7 @@ const LOG_D: LogLine[] = [
 
 const LOG_E: LogLine[] = [
   ...LOG_D,
-  ok("Warranty: Acer SG 2-yr carry-in via shop · 7-day DOA exchange"),
+  ok("Warranty: 2-yr carry-in via shop · 7-day DOA exchange"),
   ok("Services: SSD/RAM upgrades in shop, same day, free install w/ purchase"),
   ok("Warehouse → shop: same day before 3pm, else next morning"),
   { ...ok("Aspire Go 15 = display set, last unit, full warranty, no box"), tools: true },
@@ -142,33 +148,38 @@ const LOG_F2: LogLine[] = [...LOG_F, ok("Below-budget: show closest match + expl
 const LOG_G: LogLine[] = [...LOG_F2, ok("Checkout: pay in chat (Visa, card price) → collect at #05-50 · PayNow option kept")];
 
 // ── Final listing (brief §5) ────────────────────────────────────────────────
+// CANONICAL-DEMO-DATA.md §3 "The spine product": the ASUS Vivobook 15 (X1504VA) at $849 is
+// the one product that must appear identically in onboarding, the consumer bot and the
+// payments dashboard — so it is the hero card the merchant sees at the end of the call.
 export const HERO = {
-  name: "Acer Swift Go 14 (SFG14-73-56VK)",
-  price: "$1,299",
-  priceNote: "cash/PayNow · $1,349 card",
+  name: "ASUS Vivobook 15 (X1504VA)",
+  price: "$849",
   specs: [
-    "14\" 2.8K OLED 90 Hz · Intel Core Ultra 5 125H · 16 GB LPDDR5X · 1 TB SSD · Win 11 Home",
-    "Ports: 2× USB-C (Thunderbolt 4) · 2× USB-A · HDMI 2.1 · microSD · 3.5 mm · Wi-Fi 7",
-    "Weight 1.3 kg · Warranty: Acer SG 2-yr carry-in (drop at shop) · 7-day DOA exchange",
-    "Good for: uni, travel, media, light photo editing · not for gaming",
+    "15.6\" FHD · Intel Core i5-1335U · 16 GB DDR4 · 512 GB PCIe SSD · Win 11 Home",
+    "Ports: USB-C 3.2 · 2× USB-A 3.2 · HDMI · microSD · 3.5 mm · Wi-Fi 6",
+    "Weight 1.7 kg · Warranty: 2-yr carry-in (drop at shop) · 7-day DOA exchange",
+    "Good for: uni, office, everyday use · not for gaming",
   ],
-  stock: "Stock: shop 2 · warehouse 5 (same day before 3 pm)",
-  extra: "Upgrades: SSD in shop, free install",
+  stock: "Stock: shop 3 · warehouse 4 (same day before 3 pm)",
+  extra: "Upgrades: SSD/RAM in shop, free install",
   collect: "Collect at #05-50 Sim Lim Square · daily 10–7:30",
 };
 
+// The remaining nine rows of the §3 catalogue, in canonical order.
 export const PRODUCTS: Product[] = [
-  { name: "Acer Swift Go 14 Touch (SFG14-73T-51AM) — Core Ultra 5, 16 GB, 512 GB, WUXGA IPS touch", price: "$1,249", stock: "1 / 3" },
-  { name: "Acer Swift 14 AI (SF14-51-552K) — Core Ultra 5 226V, 16 GB, 512 GB, WUXGA OLED, 1.26 kg", price: "$1,449", stock: "2 / 6" },
-  { name: "Acer Swift Go 16 (SFG16-72-5315) — Core Ultra 5 125H, 16 GB, 1 TB, 16\" 3.2K OLED 120 Hz", price: "$1,349", stock: "1 / 2" },
+  { name: "Acer Swift Go 14 (SFG14-73-56VK) — Core Ultra 5, 16 GB, 512 GB OLED", price: "$1,299", priceNote: "cash · $1,349 card", stock: "2 / 5" },
+  { name: "Lenovo IdeaPad Slim 5 — Ryzen 7, 16 GB, 512 GB", price: "$1,049", stock: "2 / 3" },
   { name: "Acer Aspire Go 15 (AG15-31P) — i3-N305, 8 GB, 256 GB (display set, last unit)", price: "$599", stock: "1 / 0" },
-  { name: "ASUS Vivobook 15 (X1504VA) — i5-1335U, 16 GB, 512 GB", price: "$849", stock: "3 / 4" },
+  { name: "TP-Link Archer AX55 (AX3000 router)", price: "$129", stock: "9 / 20" },
   { name: "Samsung 990 Pro 1 TB NVMe", price: "$159", stock: "12 / 30" },
-  { name: "Crucial 16 GB DDR5-5600 SO-DIMM", price: "$79", stock: "8 / 20" },
+  { name: "Samsung T7 1 TB portable SSD", price: "$139", stock: "6 / 15" },
   { name: "Anker 7-in-1 USB-C hub", price: "$89", stock: "6 / 10" },
   { name: "Logitech MX Master 3S", price: "$129", stock: "5 / 8" },
-  { name: "Targus 15.6\" laptop backpack", price: "$59", stock: "7 / 12" },
+  { name: "Crucial 16 GB DDR5-5600 SO-DIMM", price: "$79", stock: "8 / 20" },
 ];
+
+/** Hero + list rows = the §3 catalogue. Every on-screen count derives from this. */
+export const CATALOGUE_COUNT = 1 + PRODUCTS.length;
 
 // ── Drop bar copy ───────────────────────────────────────────────────────────
 const DROP_A = "Drop a price list, photos, or paste your website. Or just tell me about your shop.";
@@ -183,13 +194,13 @@ export const FRAMES: Frame[] = [
   },
   {
     key: "B", header: "Listening", orb: "listening", orbLabel: "Listening to you",
-    caption: "Okay. We're Bizgram Asia, Sim Lim Square, fifth floor, beside the glass lift. We do everything — hard disks, graphics cards, servers — but for this I want laptops. Acer mostly, some ASUS. Our website has a lot of models but no prices, customers WhatsApp us for price. I have a price list PDF, I update it every day. And the Acer promo sheet. I'll send you those and some photos.",
+    caption: "Okay. We're Bizgram Asia, Sim Lim Square, fifth floor, beside the glass lift. We do everything — hard disks, graphics cards, servers — but for this I want laptops. ASUS, Acer, a bit of Lenovo. Our website has a lot of models but no prices, customers WhatsApp us for price. I have a price list PDF, I update it every day. And the Acer promo sheet. I'll send you those and some photos.",
     agentLine: "Got it — Bizgram Asia, laptops first, prices live in your PDF not your website. Send the price list, the Acer sheet and the photos, and paste the website too — I'll use it for the model names and ignore it for prices.",
     log: LOG_B, cards: [], dropText: DROP_A, seconds: 28,
   },
   {
     key: "C", header: "Reading uploads", orb: "speaking", orbLabel: "Speaking",
-    agentLine: "Reading… Your website lists five hundred laptops but no prices, and a lot of them are old models — I'll only use it for names. Your price list is nine pages, mostly hard disks and graphics cards; the laptops are on page seven, marked as cash or PayNow prices. The Acer sheet has full specs for four models but the promo ended December 2024. The shelf photos give me five laptops with tags, and I've got your opening hours and your WhatsApp. Let me confirm a few things.",
+    agentLine: "Reading… Your website lists five hundred laptops but no prices, and a lot of them are old models — I'll only use it for names. Your price list is nine pages, mostly hard disks and graphics cards; the laptops are on page seven, marked as cash or PayNow prices. The Acer sheet has full specs but the promo ended December 2024. The shelf photos give me four laptops with tags, and I've got your opening hours and your WhatsApp. Let me confirm a few things.",
     log: LOG_C, cards: [CARD_SITE, CARD_PRICELIST, CARD_FLYER, open(CARD_PHOTOS)], dropText: DROP_ON, seconds: 25,
   },
   {
@@ -206,7 +217,7 @@ export const FRAMES: Frame[] = [
   },
   {
     key: "F", header: "Two rules", orb: "speaking", orbLabel: "Speaking",
-    agentLine: "Two quick rules so I represent you properly. Right now customers WhatsApp you for price. If a shopper wants something cheaper than what you stock — say an eight-hundred-dollar laptop — should I only show your products, or show the closest and explain why it costs more?",
+    agentLine: "Two quick rules so I represent you properly. Right now customers WhatsApp you for price. If a shopper wants something cheaper than what you stock — say a five-hundred-dollar laptop — should I only show your products, or show the closest and explain why it costs more?",
     pills: [{ label: "Only my products" }, { label: "Closest match + explain", primary: true }],
     log: LOG_F, cards: ALL_CARDS, dropText: DROP_ON, seconds: 9,
   },
@@ -218,8 +229,8 @@ export const FRAMES: Frame[] = [
   },
   {
     key: "G", header: "Ready", orb: "speaking", orbLabel: "Speaking",
-    agentLine: "Done. Six laptops and five accessories are ready, all readable by the shopping agent. Here's how I'll describe your Swift Go 14 to a shopper.",
-    log: LOG_G, cards: [], rightLabel: "Product listing · 11 items", listing: true, dropText: DROP_ON, goLive: true, seconds: 15,
+    agentLine: "Done. Four laptops and six accessories are ready, all readable by the shopping agent. Here's how I'll describe your Vivobook 15 to a shopper.",
+    log: LOG_G, cards: [], rightLabel: `Product listing · ${CATALOGUE_COUNT} items`, listing: true, dropText: DROP_ON, goLive: true, seconds: 15,
   },
 ];
 

@@ -9,7 +9,7 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: "Merchant onboarding",
+  title: "Cashew — merchant onboarding",
   description: "Talk to the agent, drop what you have, go live.",
 };
 
