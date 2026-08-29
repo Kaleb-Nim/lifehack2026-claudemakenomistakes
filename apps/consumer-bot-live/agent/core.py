@@ -7,7 +7,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 from collections.abc import Callable
 from typing import Any
 
@@ -52,10 +51,12 @@ Rules:
   remember once with that fact. Only record what they actually said, never an
   inference, and never mention that you saved it unless they ask.
 - Once the shopper chooses a product, call buy_and_pay with the exact tool
-  result fields. The application will return ConfirmationRequired. Ask the
-  shopper to confirm the named product and exact price, then stop. Do not call
-  buy_and_pay again in that turn. After the shopper explicitly confirms in a
-  new message, immediately call buy_and_pay again with the identical payload.
+  result fields. This creates a pending order and opens the payment app, where
+  the shopper authorises with their passkey. Do not ask them to confirm in
+  chat first, and never call buy_and_pay for a product they have not chosen.
+- After buy_and_pay, state the product and exact price and tell them to tap
+  the payment button. Never say the payment succeeded - it has not happened
+  yet, and you will not see the result.
 - Use check_order_status and cancel_order for order requests; do not guess.
 - If a tool returns an error or says it is unavailable, explain that plainly
   and briefly offer to retry. Do not claim the action succeeded or invent
@@ -90,7 +91,6 @@ MAX_TOOL_ROUNDS = 8
 _client: AsyncOpenAI | None = None
 _previous_response_ids: dict[tuple[int, int], str] = {}
 _conversation_locks: dict[tuple[int, int], asyncio.Lock] = {}
-_pending_purchases: dict[tuple[int, int], dict[str, Any]] = {}
 
 # Orders that have been created but not yet paid for. bot.py drains this after
 # each turn to attach the Mini App launch button, which the agent loop cannot
@@ -127,38 +127,11 @@ def _json_result(value: Any) -> str:
     return json.dumps(value, default=str, ensure_ascii=False)
 
 
-def _is_explicit_purchase_confirmation(text: str) -> bool:
-    normalized = re.sub(r"[^a-z0-9]+", " ", text.casefold()).strip()
-    confirmations = {
-        "yes",
-        "yes please",
-        "confirm",
-        "confirm purchase",
-        "confirm payment",
-        "buy it",
-        "purchase it",
-        "pay now",
-        "proceed",
-        "go ahead",
-    }
-    return normalized in confirmations
-
-
-def _purchase_payload(arguments: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "merchant_name": arguments.get("merchant_name"),
-        "product_name": arguments.get("product_name"),
-        "product_ref": arguments.get("product_ref"),
-        "amount_cents": arguments.get("amount_cents"),
-    }
-
-
 async def _run_tool(
     name: str,
     arguments_json: str,
     *,
     conversation_key: tuple[int, int],
-    purchase_authorization: list[dict[str, Any] | None],
 ) -> str:
     function = TOOL_DISPATCH.get(name)
     if function is None:
@@ -170,23 +143,13 @@ async def _run_tool(
             raise TypeError("Tool arguments must be a JSON object")
 
         if name == "buy_and_pay":
-            purchase = _purchase_payload(arguments)
-            if purchase != purchase_authorization[0]:
-                _pending_purchases[conversation_key] = purchase
-                return _json_result(
-                    {
-                        "ok": False,
-                        "error_type": "ConfirmationRequired",
-                        "error": (
-                            "Do not call buy_and_pay again in this turn. Ask the "
-                            "shopper to confirm this exact purchase, then stop."
-                        ),
-                        "purchase": purchase,
-                    }
-                )
-            # Consume the authorization before the side effect so a repeated
-            # model call cannot create a duplicate purchase.
-            purchase_authorization[0] = None
+            # No in-chat confirmation gate: buy_and_pay only creates a `pending`
+            # order and opens the Mini App. Authorisation happens there, with a
+            # biometric passkey against a payment preview showing the real
+            # amount - the same place the hardcoded demo bot puts it. Nothing
+            # here can move money, so the worst a stray call produces is an
+            # unpaid row.
+            #
             # Identity comes from Telegram, never from the model.
             arguments["telegram_user_id"] = conversation_key[0]
             arguments["telegram_chat_id"] = conversation_key[1]
@@ -252,10 +215,6 @@ async def _handle_message_locked(
         "text": {"verbosity": "low"},
     }
 
-    pending_purchase = _pending_purchases.pop(conversation_key, None)
-    purchase_authorization = [
-        pending_purchase if _is_explicit_purchase_confirmation(text) else None
-    ]
     previous_response_id = _previous_response_ids.get(conversation_key)
     if previous_response_id is not None:
         request["previous_response_id"] = previous_response_id
@@ -277,7 +236,6 @@ async def _handle_message_locked(
                 call.name,
                 call.arguments,
                 conversation_key=conversation_key,
-                purchase_authorization=purchase_authorization,
             )
             tool_outputs.append(
                 {

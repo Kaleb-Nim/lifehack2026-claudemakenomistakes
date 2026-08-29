@@ -31,11 +31,13 @@ Telegram  <->  bot.py  <->  agent/core.py (OpenAI tool-calling loop)
 - **The agent brain** (`agent/core.py`) is an OpenAI Responses API tool-calling
   loop over the four tools in `agent/tool_schemas.py`. It keeps in-process
   conversation continuity per Telegram user/chat; continuity resets on restart.
-- **Purchase confirmation is enforced in Python**, not trusted to prompting:
-  the first `buy_and_pay` call records the exact payload and returns
-  `ConfirmationRequired`; only an explicit confirmation in the shopper's next
-  message authorizes that identical payload. Any change requires confirmation
-  again.
+- **Purchase authorisation happens in the Mini App, not in chat.** `buy_and_pay`
+  only creates a `pending` order and opens the payment app; the shopper
+  authorises there with a biometric passkey against a preview showing the real
+  amount. This mirrors the hardcoded demo bot. An earlier build also demanded a
+  typed confirmation phrase in chat before the tool would run; that was removed
+  deliberately (2026-08-29) as double-confirmation — do not reintroduce it
+  without asking. Nothing in the agent loop can move money.
 - **Memory** (the diagram's MEMORY box) persists in Supabase across restarts.
   Two sources, deliberately kept apart by how much they can be trusted:
   purchase history is read live from `orders` (ground truth, never copied
@@ -69,19 +71,19 @@ The payment leg cannot live in the agent loop: a Telegram Web App only opens
 from a keyboard button, and its result arrives as a separate `web_app_data`
 message rather than a tool return value. So the flow is split:
 
-1. The model calls `buy_and_pay`. `_run_tool` refuses the first call for a
-   given payload and makes the model ask for confirmation.
-2. The shopper replies with an exact phrase from the whitelist in
-   `_is_explicit_purchase_confirmation`. Free text never authorises payment —
-   that is the Trust & Safety guarantee, so do not loosen it to fuzzy matching.
-3. `buy_and_pay` creates a `pending` order. `telegram_user_id`/
+1. The model calls `buy_and_pay` once the shopper picks a product. No in-chat
+   confirmation step — see the note above.
+2. `buy_and_pay` creates a `pending` order. `telegram_user_id`/
    `telegram_chat_id` are **injected by `_run_tool`**, never taken from the
    model, which must not invent user identity.
-4. `bot.py` drains `core.take_pending_payment()` and attaches the Mini App
+3. `bot.py` drains `core.take_pending_payment()` and attaches the Mini App
    button. Without `MINI_APP_URL` the order is still created and the reply says
    checkout is unavailable.
-5. The Mini App runs passkey → preview → confirmation and posts back an
+4. The Mini App runs passkey → preview → confirmation and posts back an
    `order_id`. `bot.py` settles it to `paid`.
+
+**This makes the Mini App the only consent gate**, so its checks carry the whole
+Trust & Safety story. Do not weaken them.
 
 **The Mini App payload is client-supplied and unsigned**, so `on_web_app_data`
 re-checks everything against the database before settling: the order must

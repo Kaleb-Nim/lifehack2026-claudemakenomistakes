@@ -81,10 +81,10 @@ set +a
 python bot.py
 ```
 
-Messages now run through the OpenAI Responses API and can call all four tools.
-Replies use low verbosity and a concise commerce dialogue policy. Purchases
-have a Python-enforced two-turn confirmation gate: the shopper must confirm the
-exact product and amount in their next message before `buy_and_pay` can run.
+Messages now run through the OpenAI Responses API and can call all five tools.
+Replies use low verbosity and a concise commerce dialogue policy. Choosing a
+product creates a `pending` order and opens the checkout Mini App; the shopper
+authorises there with a passkey, so nothing is bought from chat alone.
 
 ## Checkout Mini App
 
