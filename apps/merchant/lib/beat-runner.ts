@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useRealtimeSession, TRANSCRIPTION_COMPLETED_SUFFIX, type RealtimeEvent, type SessionFailure, type SessionPhase } from "../hooks/useRealtimeSession";
-import { AUDIO_TIMEOUT_MS, BEATS, ECHO_GRACE_MS, MIN_REPLY_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, beatIndexOf, type AdvanceOn, type Beat } from "./agent-script";
+import { AUDIO_TIMEOUT_MS, BEAT_THINK_MS, BEATS, ECHO_GRACE_MS, MIN_REPLY_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, WORK_THINK_MS, beatIndexOf, type AdvanceOn, type Beat, type ThinkTier } from "./agent-script";
 
 /** Maximum finalized owner turns kept in the rolling caption history (QUICK-caption-history.md). */
 const CAPTION_HISTORY_MAX = 3;
@@ -84,6 +84,17 @@ export interface BeatRunnerApi {
    * beat); cleared on disconnect or a fresh session.
    */
   captionHistory: CaptionHistoryEntry[];
+  /**
+   * The agent's pending think pause (QUICK-agent-thinking-time.md), or `null` when it is not
+   * thinking — no reply pending, or the pause has already elapsed and `response.create` has
+   * been sent. `"beat"` is the ordinary orb-only pause; `"work"` is the longer post-upload
+   * pause (beat C) that also shows a progress bar and trace lines. A fresh
+   * `input_audio_buffer.speech_started` during either tier cancels it outright (never resumes
+   * it) — the superseded turn simply never gets replied to; the new turn's own eventual
+   * `speech_stopped` starts a fresh pause instead, so the agent never answers a stale turn.
+   * Always cleared on disconnect/fallback so the orb can never be left stuck mid-think.
+   */
+  thinking: ThinkTier | null;
 }
 
 /**
@@ -136,6 +147,11 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   /** True between a `response.created` and its matching `response.done` — a second reply is suppressed while this is true, silently, so a rejected turn is never dead air. */
   const activeResponseRef = useRef(false);
   const audioTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The pending think-pause timer (see BeatRunnerApi.thinking doc) — set the moment
+   * sendResponseCreate is asked for a reply, cleared the moment the pause elapses and
+   * response.create is actually sent, or cancelled outright by a fresh owner turn. */
+  const thinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [thinking, setThinking] = useState<ThinkTier | null>(null);
   const onboardingRef = useRef(onboarding);
   useEffect(() => {
     onboardingRef.current = onboarding;
@@ -175,15 +191,30 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
    * The sole place a bare reply is requested. Silently suppressed while a response is
    * already in flight — the API would reject a second one, and a rejected turn is dead air
    * on camera, so suppression must never surface an error or consume the turn's advance.
+   *
+   * Requesting a reply now first opens a think pause (QUICK-agent-thinking-time.md) — the
+   * actual `response.create` send, and the `AUDIO_TIMEOUT_MS` clock that watches for its
+   * audio, both happen only once the pause elapses, never before. This is still the one
+   * `response.create` send site; the pause only delays when this function's own body runs
+   * its send, it does not add a second call site or an `instructions` override anywhere.
+   * Re-entrant calls (e.g. the `R` key's `repeat()`) restart the pause rather than stacking a
+   * second pending send.
    */
   const sendResponseCreate = useCallback(() => {
     if (activeResponseRef.current) return;
-    audioArrivedRef.current = false;
-    sendRef.current({ type: "response.create", response: {} });
-    if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
-    audioTimeoutRef.current = setTimeout(() => {
-      if (!audioArrivedRef.current) disconnectRef.current("dropped");
-    }, AUDIO_TIMEOUT_MS);
+    if (thinkTimeoutRef.current) clearTimeout(thinkTimeoutRef.current);
+    const tier: ThinkTier = currentBeatRef.current?.thinkTier ?? "beat";
+    setThinking(tier);
+    thinkTimeoutRef.current = setTimeout(() => {
+      thinkTimeoutRef.current = null;
+      setThinking(null);
+      audioArrivedRef.current = false;
+      sendRef.current({ type: "response.create", response: {} });
+      if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
+      audioTimeoutRef.current = setTimeout(() => {
+        if (!audioArrivedRef.current) disconnectRef.current("dropped");
+      }, AUDIO_TIMEOUT_MS);
+    }, tier === "work" ? WORK_THINK_MS : BEAT_THINK_MS);
   }, []);
 
   // `advance` schedules itself for a beat's remaining dwell (see below) — a ref mirror, kept
@@ -259,6 +290,16 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     }
 
     if (event.type === "input_audio_buffer.speech_started") {
+      // A fresh turn cancels any pending think pause outright (QUICK-agent-thinking-time.md)
+      // — the reply it was about to send belongs to the turn that just ended, which this new
+      // turn supersedes, so it must never fire. This is a cancel, not a resume: the new
+      // turn's own eventual speech_stopped (below) starts a brand-new pause through the
+      // normal sendResponseCreate path once it qualifies, rather than this handler
+      // rescheduling the old one. Safe to run even for speech that turns out to be an echo
+      // (checked further below) — a stray cancelled pause just means one fewer reply to a
+      // turn nobody actually finished either.
+      if (thinkTimeoutRef.current) { clearTimeout(thinkTimeoutRef.current); thinkTimeoutRef.current = null; }
+      setThinking(null);
       // A fresh turn — the caption bubble (if any) is allowed to show again; the underlying
       // text itself is reset by hooks/useRealtimeSession.ts on this same event.
       setCaptionSuppressed(false);
@@ -338,7 +379,23 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   if (prevSessionPhase !== session.phase) {
     setPrevSessionPhase(session.phase);
     if (session.phase !== "live" && captionHistory.length > 0) setCaptionHistory([]);
+    // Think state must never survive a disconnect/fallback (QUICK-agent-thinking-time.md) —
+    // an orb stuck mid-"thinking" after the session drops to scripted mode would be a visible
+    // bug. Same render-time-adjustment idiom as captionHistory above (state only, no ref
+    // access — the pending timer itself is cancelled by the effect below).
+    if (session.phase !== "live" && thinking !== null) setThinking(null);
   }
+
+  // The ref half of the disconnect/fallback cleanup above: refs cannot be read or written
+  // during render (react-hooks/refs), so cancelling the actual pending think timer — as
+  // opposed to just resetting the `thinking` state — has to live in an effect. No setState
+  // here (react-hooks/set-state-in-effect); that half stays in the render-time block above.
+  useEffect(() => {
+    if (session.phase !== "live" && thinkTimeoutRef.current) {
+      clearTimeout(thinkTimeoutRef.current);
+      thinkTimeoutRef.current = null;
+    }
+  }, [session.phase]);
 
   // Enter the first beat and open the conversation exactly once, the moment the session
   // goes live — a bare reply, not a scripted line; the session config sent at mint time is
@@ -353,6 +410,7 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   useEffect(() => () => {
     if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
     if (dwellTimerRef.current) clearTimeout(dwellTimerRef.current);
+    if (thinkTimeoutRef.current) clearTimeout(thinkTimeoutRef.current);
   }, []);
 
   const repeat = useCallback(() => {
@@ -375,5 +433,6 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     beatTotal: BEATS.length,
     caption: captionSuppressed ? null : session.caption,
     captionHistory,
+    thinking,
   };
 }

@@ -24,6 +24,14 @@ export type ToolName =
 /** What causes the beat runner to advance past this beat. */
 export type AdvanceOn = "speech_stopped" | "upload" | "pill" | "operator" | "audio_done";
 
+/**
+ * How long the agent pauses before replying (QUICK-agent-thinking-time.md) — "beat" on every
+ * ordinary conversational turn (orb-only, no bar/text), "work" only on the beat where the
+ * agent is visibly reading the uploaded sources (orb + progress bar + trace lines). See
+ * BEAT_THINK_MS / WORK_THINK_MS below for the actual durations and budget rationale.
+ */
+export type ThinkTier = "beat" | "work";
+
 /** OpenAI Realtime `session.tools` entry — see 02-RESEARCH.md "Tools (SCRIPT-03)". */
 export interface RealtimeFunctionTool {
   type: "function";
@@ -53,6 +61,12 @@ export interface Beat {
   minDwellMs?: number;
   /** The owner's expected next line or action, shown on the operator teleprompter (plan 02-03). */
   ownerCue: string;
+  /**
+   * Which think-pause tier a reply requested while this beat is current uses (see
+   * ThinkTier above). Omitted means "beat" — the ordinary, orb-only pause. Only beat C
+   * (the post-upload "reading the sources" beat) sets this to "work".
+   */
+  thinkTier?: ThinkTier;
   tools: BeatToolCall[];
 }
 
@@ -177,6 +191,10 @@ export const BEATS: Beat[] = [
     // own audio does.
     minDwellMs: 9000,
     ownerCue: "Stay quiet and let me finish reading — I'll flag anything I'm not sure about.",
+    // The one beat where the reply pause is motivated on screen (QUICK-agent-thinking-time.md):
+    // this is the "agent reads the sources" beat, so its reply gets the Work-tier pause
+    // (progress bar + trace lines) instead of the ordinary orb-only Beat-tier pause.
+    thinkTier: "work",
     tools: [
       tool("resolve_flag", { conflict: "Swift Go 14: flyer $1,349 (expired) vs price list $1,299 vs shelf $1,299", resolution: "Swift Go 14 = $1,299 cash/PayNow · $1,349 card" }),
       tool("resolve_flag", { conflict: "Price list says \"cash or PayNow\" — card price unknown", resolution: "Card surcharge: +$50 on laptops" }),
@@ -266,6 +284,30 @@ export const MIN_REPLY_MS = 400;   // below this, the turn was a cough — no re
 export const MIN_SPEECH_MS = 1200; // below this, the frame does not advance (still gets a reply)
 export const SETTLE_MS = 400;      // pause before the agent's next line starts
 export const AUDIO_TIMEOUT_MS = 2000; // no audio within this window of response.create = dropped session
+
+// ── Think-pause timing (QUICK-agent-thinking-time.md) ───────────────────────
+// FRAMES total exactly 150s against a ~2:00 target cut (lib/merchant-data.ts `seconds`
+// fields) — there is almost no slack, so the reply pause is motivated, not uniform. A
+// uniform ~5s pause on every one of the ~6 speech-driven turns would burn ~30s, a fifth of
+// the runtime. Instead: a short Beat-tier pause (orb only) on every ordinary turn, and a
+// longer Work-tier pause (orb + bar + trace) only on beat C, the one beat where the agent is
+// visibly doing something (reading the uploaded sources) rather than just talking. Both are
+// requested inside lib/beat-runner.ts's sendResponseCreate — the sole response.create site —
+// as a delay before that send, never as a second send site or an `instructions` override.
+export const BEAT_THINK_MS = 700;  // ordinary turn: orb -> "thinking", no bar, no text
+export const WORK_THINK_MS = 4500; // beat C only: orb "thinking" + progress bar + trace lines
+
+/**
+ * Work-tier think trace lines (QUICK-agent-thinking-time.md) — shown, staggered, while the
+ * Work-tier progress bar fills on beat C. This is the one obvious place plan 02-03 re-sources
+ * from once real tool-call results exist, instead of this hardcoded list — the visuals in
+ * components/Onboarding.tsx read from this export and should not need to change.
+ */
+export const WORK_THINK_TRACE: string[] = [
+  "Reading price list · 9 pages",
+  "Cross-checking supplier flyer",
+  "Comparing shelf photos",
+];
 
 /**
  * How long after the agent's audio stops that inbound speech is still treated as the
