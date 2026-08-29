@@ -92,6 +92,23 @@ wrong-user, failed-biometric, malformed-payload and replay cases — a replay of
 a valid payload is rejected as already paid rather than charging twice. Keep
 those checks if you touch that handler.
 
+## Order tools are scoped to the shopper
+
+`check_order_status` and `cancel_order` take `telegram_user_id` **injected by
+`_run_tool`**, and every lookup is filtered by it. An order id alone is never
+sufficient: reading or cancelling an order requires it to belong to the caller.
+Before this, either tool would act on any id supplied, so a shopper holding
+someone else's order id could read their purchase or cancel it.
+
+- A missing order and someone else's order return the **same** error, so the
+  tools cannot be used to probe which ids exist.
+- `check_order_status` with `order_id: null` lists that shopper's own orders —
+  this is how "show me my orders" is answered, and how they find an id they
+  never wrote down.
+- `cancel_order` refuses anything not `pending`/`held` (a paid order needs a
+  refund, which does not exist yet) and is idempotent on an already-cancelled
+  order.
+
 ## How results are shown
 
 Search results are rendered by `bot.py`, not written by the model. Each product
@@ -110,6 +127,9 @@ products is exactly the wall of text the cards exist to replace.
 - A product with no usable image falls back to a text card, so one missing
   photo costs a picture rather than the result.
 - `MAX_CARDS` caps the messages sent; the tool itself allows up to 10.
+- Orders render the same way via `take_pending_orders()` — a compact block with
+  a status mark per order and an 8-character id prefix. Full UUIDs are
+  unreadable in chat and never need typing back.
 
 ## Shopper memory
 

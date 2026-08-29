@@ -90,3 +90,23 @@ def update_order_status(
         update["cancellation_reason"] = cancellation_reason
     response = get_client().table("orders").update(update).eq("id", order_id).execute()
     return response.data[0]
+
+
+def list_orders_for_user(
+    telegram_user_id: int, limit: int = 20
+) -> list[dict[str, Any]]:
+    """Return this shopper's orders, newest first.
+
+    Scoped by telegram_user_id rather than taking ids from the caller, so a
+    shopper can only ever see their own orders.
+    """
+    response = (
+        get_client()
+        .table("orders")
+        .select("*")
+        .eq("telegram_user_id", telegram_user_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return response.data or []

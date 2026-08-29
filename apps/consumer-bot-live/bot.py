@@ -95,6 +95,39 @@ def _card_caption(rank: int, product: dict[str, Any]) -> str:
     return caption[:MAX_CAPTION_CHARS]
 
 
+STATUS_MARKS = {
+    "paid": "✅",
+    "pending": "⏳",
+    "held": "⏸",
+    "cancelled": "✖",
+}
+
+
+async def _send_order_list(message, orders: list[dict[str, Any]]) -> None:
+    """Print orders as a compact block rather than a recited sentence."""
+    if not orders:
+        return
+
+    lines = ["<b>Your orders</b>"]
+    for order in orders:
+        mark = STATUS_MARKS.get(order["status"], "•")
+        lines.append("")
+        lines.append(
+            f"{mark} <b>{html.escape(_short_title(order['product_name']))}</b>"
+        )
+        lines.append(
+            f"{html.escape(order['amount_display'])} · "
+            f"{html.escape(order['merchant_name'])} · {order['status']}"
+        )
+        # Full UUIDs are unreadable in chat and never need typing back; the
+        # prefix is enough to match a row, and code formatting makes it tappable.
+        lines.append(f"<code>#{order['order_id'][:8]}</code>")
+        if order.get("cancellation_reason"):
+            lines.append(f"<i>{html.escape(order['cancellation_reason'])}</i>")
+
+    await message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
 async def _send_product_cards(message, products: list[dict[str, Any]]) -> None:
     """Send one photo card per product, each with its own Buy button.
 
@@ -211,8 +244,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     await message.reply_text(reply, reply_markup=keyboard)
 
-    # Cards come after the reply so the agent's framing line reads first.
+    # Cards and lists come after the reply so the agent's framing line reads first.
     await _send_product_cards(message, core.take_pending_results(user.id, chat.id))
+    await _send_order_list(message, core.take_pending_orders(user.id, chat.id))
 
 
 async def on_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

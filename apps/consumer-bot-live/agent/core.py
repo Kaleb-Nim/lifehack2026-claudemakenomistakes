@@ -72,6 +72,10 @@ Rules:
   describe or price the products - they can already see all of it, and
   repeating it is the wall of text we are avoiding. Say one short line at most,
   about what you filtered on or what to weigh up, then stop.
+- The same applies to check_order_status: the application prints the orders as
+  a formatted list. Never recite order ids, statuses or amounts back. Answer
+  only what was asked - "two orders, one still unpaid" - in one short line.
+  Order ids are long, so refer to an order by its product name, not its id.
 
 Style and routing examples (placeholders are not catalogue facts):
 1. Shopper: "I need a laptop."
@@ -122,6 +126,18 @@ def take_pending_results(
     return _pending_results.pop((telegram_user_id, telegram_chat_id), [])
 
 
+# Order lists awaiting rendering, for the same reason as _pending_results: a
+# model reciting order ids and amounts produces an unreadable run-on line.
+_pending_orders: dict[tuple[int, int], list[dict[str, Any]]] = {}
+
+
+def take_pending_orders(
+    telegram_user_id: int, telegram_chat_id: int
+) -> list[dict[str, Any]]:
+    """Pop the order list waiting to be rendered for this conversation."""
+    return _pending_orders.pop((telegram_user_id, telegram_chat_id), [])
+
+
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
@@ -170,8 +186,11 @@ async def _run_tool(
             arguments["telegram_user_id"] = conversation_key[0]
             arguments["telegram_chat_id"] = conversation_key[1]
 
-        if name == "remember":
-            # Same rule as buy_and_pay: identity comes from Telegram.
+        # Same rule as buy_and_pay: identity comes from Telegram. For the order
+        # tools this is also the ownership check - it scopes every lookup and
+        # cancellation to the shopper who sent the message, so knowing an order
+        # id is not enough to read or cancel someone else's order.
+        if name in ("remember", "check_order_status", "cancel_order"):
             arguments["telegram_user_id"] = conversation_key[0]
 
         result = await asyncio.to_thread(function, **arguments)
@@ -181,6 +200,11 @@ async def _run_tool(
 
         if name == "product_discovery" and isinstance(result, list) and result:
             _pending_results[conversation_key] = result
+
+        if name == "check_order_status" and isinstance(result, dict):
+            orders = result.get("orders") or []
+            if orders:
+                _pending_orders[conversation_key] = orders
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         return _json_result(
             {"ok": False, "error": str(exc), "error_type": type(exc).__name__}

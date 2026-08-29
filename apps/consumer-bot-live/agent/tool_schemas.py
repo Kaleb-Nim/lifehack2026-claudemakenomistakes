@@ -82,10 +82,24 @@ BUY_AND_PAY_TOOL = {
 CHECK_ORDER_STATUS_TOOL = {
     "type": "function",
     "name": "check_order_status",
-    "description": "Look up the current status of an existing order.",
+    "description": (
+        "Look up this shopper's orders. Pass null for order_id to list all of "
+        "them - use that whenever they ask to see their orders, order history, "
+        "or purchases, or when they refer to an order without giving an id. "
+        "Only pass an order_id if the shopper actually supplied one. Results "
+        "are always limited to their own orders."
+    ),
     "parameters": {
         "type": "object",
-        "properties": {"order_id": {"type": "string"}},
+        "properties": {
+            "order_id": {
+                "type": ["string", "null"],
+                "description": (
+                    "A specific order id the shopper gave, or null to list "
+                    "all of their orders."
+                ),
+            }
+        },
         "required": ["order_id"],
         "additionalProperties": False,
     },
