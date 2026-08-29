@@ -1,4 +1,4 @@
-"""Telegram transport for the deterministic NovaBot consumer demo."""
+"""Telegram transport for the deterministic Pluto consumer demo."""
 
 from __future__ import annotations
 
@@ -6,8 +6,10 @@ import json
 import logging
 import os
 from collections.abc import MutableMapping
+from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import httpx
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -17,6 +19,7 @@ from telegram import (
     Update,
     WebAppInfo,
 )
+from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
     CallbackContext,
@@ -33,6 +36,19 @@ import flow
 LOGGER = logging.getLogger(__name__)
 SESSION_KEY = "consumer_sessions"
 SENSITIVE_ACTIONS = {flow.CONFIRM_WITH_PASSKEY, flow.CONFIRM_CANCELLATION}
+ENV_PATH = Path(__file__).with_name(".env")
+
+
+def current_mini_app_url() -> str:
+    """Read the tunnel URL at send time so a rotated tunnel takes effect immediately."""
+    try:
+        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == "MINI_APP_URL":
+                return value.strip().strip('"\'')
+    except OSError:
+        pass
+    return os.environ.get("MINI_APP_URL", "").strip()
 
 
 def get_session(
@@ -66,7 +82,7 @@ def replace_session(
 def telegram_markup(
     view: flow.View,
 ) -> InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove:
-    mini_app_url = os.environ.get("MINI_APP_URL", "").strip()
+    mini_app_url = current_mini_app_url()
     payment_button = next(
         (
             button
@@ -80,6 +96,8 @@ def telegram_markup(
         parts = urlsplit(mini_app_url)
         query = dict(parse_qsl(parts.query, keep_blank_values=True))
         query["confirmation_label"] = payment_button.label
+        if view.product_name:
+            query["product_name"] = view.product_name
         transaction_url = urlunsplit(
             (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
         )
@@ -111,6 +129,42 @@ def telegram_markup(
     return ReplyKeyboardRemove()
 
 
+async def send_view(
+    message: object,
+    context: ContextTypes.DEFAULT_TYPE,
+    view: flow.View,
+) -> None:
+    markup = telegram_markup(view)
+    rich_message: dict[str, str] | None = None
+    if view.rich_html:
+        rich_message = {"html": view.rich_html}
+    elif view.rich_markdown:
+        rich_message = {"markdown": view.rich_markdown}
+    if rich_message:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.post(
+                    f"https://api.telegram.org/bot{context.bot.token}/sendRichMessage",
+                    json={
+                        "chat_id": message.chat_id,
+                        "rich_message": rich_message,
+                        "reply_markup": markup.to_dict(),
+                    },
+                )
+            payload = response.json()
+            if response.is_success and payload.get("ok") is True:
+                return
+            LOGGER.warning("Telegram rejected a Rich Message; using HTML fallback")
+        except (httpx.HTTPError, RuntimeError, TypeError, ValueError):
+            LOGGER.warning("Telegram Rich Message delivery failed; using HTML fallback")
+
+    await message.reply_text(
+        view.text,
+        reply_markup=markup,
+        parse_mode=ParseMode.HTML,
+    )
+
+
 async def on_web_app_data(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -131,6 +185,7 @@ async def on_web_app_data(
         session.step is flow.Step.VISA_CONFIRMATION
         and payload.get("type") == "biometric_confirmation"
         and payload.get("status") == "authorized"
+        and payload.get("method") == "telegram_biometric"
     ):
         result = flow.handle_action(session, flow.CONFIRM_WITH_PASSKEY)
     else:
@@ -142,10 +197,7 @@ async def on_web_app_data(
             ),
         )
 
-    await update.effective_message.reply_text(
-        result.view.text,
-        reply_markup=telegram_markup(result.view),
-    )
+    await send_view(update.effective_message, context, result.view)
 
 
 def text_choice_action(view: flow.View, text: str) -> str | None:
@@ -178,6 +230,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         content.WELCOME_TEXT,
         reply_markup=ReplyKeyboardRemove(),
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -195,10 +248,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         action = text_choice_action(view, update.effective_message.text)
         if action is not None:
             result = flow.handle_action(session, action)
-    await update.effective_message.reply_text(
-        result.view.text,
-        reply_markup=telegram_markup(result.view),
-    )
+    await send_view(update.effective_message, context, result.view)
 
 
 async def on_unknown_command(
@@ -208,11 +258,8 @@ async def on_unknown_command(
     if update.effective_user is None or update.effective_message is None:
         return
     session = get_session(context.chat_data, update.effective_user.id)
-    view = flow.current_view(session, content.UNKNOWN_COMMAND_GUIDANCE)
-    await update.effective_message.reply_text(
-        view.text,
-        reply_markup=telegram_markup(view),
-    )
+    view = flow.current_view(session)
+    await send_view(update.effective_message, context, view)
 
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -228,10 +275,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if query.message is None:
         LOGGER.info("Callback has no source message; response was not sent")
         return
-    await query.message.reply_text(
-        result.view.text,
-        reply_markup=telegram_markup(result.view),
-    )
+    await send_view(query.message, context, result.view)
 
 
 async def on_error(update: object, context: CallbackContext) -> None:

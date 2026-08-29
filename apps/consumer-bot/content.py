@@ -2,20 +2,155 @@
 
 from __future__ import annotations
 
+import html
+import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 MERCHANT_NAME = "Nova Electronics"
-PRODUCT_NAME = "NovaBook Pro 14"
-PRODUCT_PRICE = 899
-PRODUCT_SPECS = "16 GB RAM · 512 GB SSD"
 HUB_NAME = "USB-C hub"
 HUB_PRICE = 30
 SLEEVE_NAME = "protective sleeve"
 ORDER_ID = "NE-2048"
+TRACKING_CODE = "SG-NOVA-2048"
 REFUND_REFERENCE = "RF-8821"
 MASKED_CARD = "Visa ···· 4242"
+SHIPPING_ADDRESS = "12 Computing Drive, Singapore 117417"
 BUDGET_REQUEST = "I want a laptop under S$1,000."
-WELCOME_TEXT = "NovaBot is ready."
+WELCOME_TEXT = "<b>Pluto is ready</b>"
+
+
+@dataclass(frozen=True)
+class Laptop:
+    key: str
+    name: str
+    price: int
+    processor: str
+    ram: str
+    storage: str
+    display: str
+    source_url: str
+    image_url: str
+
+
+LAPTOPS = (
+    Laptop(
+        key="acer-aspire-lite-14",
+        name="Acer Aspire Lite 14",
+        price=1099,
+        processor="Ryzen 7 7730U",
+        ram="16 GB",
+        storage="512 GB",
+        display='14.5" WUXGA',
+        source_url="https://store.acer.com/en-sg/laptops/aspire-performance/memory_standard-16_gb",
+        image_url=(
+            "https://cdn.hstatic.net/products/200000722513/"
+            "laptop-acer-aspire-lite-14-al14-44p-r0sp-1_"
+            "7b2fbf16567141208e4fe94765b48d7d_master.jpg"
+        ),
+    ),
+    Laptop(
+        key="lenovo-ideapad-5a",
+        name="Lenovo IdeaPad 5a 2-in-1",
+        price=1310,
+        processor="Ryzen AI 5 430",
+        ram="16 GB",
+        storage="512 GB",
+        display='15.3" WUXGA touch',
+        source_url="https://www.lenovo.com/sg/en/p/laptops/ideapad/ideapad-2-in-1-series/lenovo-ideapad-5a-2-in-1-gen-11-15-inch-amd-laptop/83umcto1wwsg2",
+        image_url=(
+            "https://p1-ofp.static.pub/ShareResource/optimized/pdp/ideapad/"
+            "ideapad-2-in-1-series/len101i0141/"
+            "lenovo-ideapad-slim-5a-2-in-1-gen-11-15-amd-pdp-gallery-1."
+            "5ea6d13005b24a5c.png"
+        ),
+    ),
+    Laptop(
+        key="microsoft-surface-laptop-13",
+        name="Microsoft Surface Laptop 13",
+        price=1499,
+        processor="Snapdragon X Plus",
+        ram="16 GB",
+        storage="512 GB",
+        display='13" touchscreen',
+        source_url="https://www.microsoft.com/en-sg/d/surface-laptop-copilot-pc-13-inch/8mzbmmcjzqv3",
+        image_url=(
+            "https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/"
+            "b00-Surface-Laptop-Snapdragon-13-inch-8GB-1Ed-Front"
+            "?wid=960&hei=720&fit=crop"
+        ),
+    ),
+    Laptop(
+        key="hp-probook-4-g1i",
+        name="HP ProBook 4 G1i 14",
+        price=1419,
+        processor="Core Ultra 5",
+        ram="16 GB",
+        storage="512 GB",
+        display='14" WUXGA',
+        source_url="https://www.hp.com/sg-en/shop/laptops-tablets/intel-laptops.html?formfactor=standard-laptop&memstd=16-gb&processorfamily=intel%C2%AE-core%E2%84%A2-ultra-5-processor",
+        image_url=(
+            "https://hp.widen.net/content/feubbswtcw/png/feubbswtcw.png"
+            "?color=ffffff00&dpi=72&h=600&w=800"
+        ),
+    ),
+    Laptop(
+        key="dell-inspiron-14-7440",
+        name="Dell Inspiron 14 2-in-1",
+        price=1849,
+        processor="Core 7 150U",
+        ram="16 GB",
+        storage="512 GB",
+        display='14" FHD+ touch',
+        source_url="https://www.dell.com/en-sg/shop/dell-laptops/inspiron-14-2-in-1-laptop/spd/inspiron-14-7440-2-in-1-laptop",
+        image_url=(
+            "https://i.dell.com/is/image/DellContent/content/dam/ss2/"
+            "product-images/dell-client-products/notebooks/inspiron-notebooks/"
+            "14-2-in-1-7440-intel/"
+            "in7440-xtb-05030rf105-ice-bl-fpr.psd?fmt=jpg&wid=570&hei=400"
+        ),
+    ),
+)
+LAPTOPS_BY_KEY = {laptop.key: laptop for laptop in LAPTOPS}
+DEFAULT_LAPTOP = LAPTOPS[0]
+
+LAPTOP_PATTERNS = (
+    (
+        "acer-aspire-lite-14",
+        re.compile(
+            r"\b(?:acer|aspire(?:\s+lite)?(?:\s+14)?|al14-44p)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "lenovo-ideapad-5a",
+        re.compile(
+            r"\b(?:lenovo|ideapad\s+5a(?:\s+2[- ]in[- ]1)?|83umcto1wwsg2)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "microsoft-surface-laptop-13",
+        re.compile(
+            r"\b(?:microsoft|surface(?:\s+laptop)?(?:\s+13)?)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "hp-probook-4-g1i",
+        re.compile(
+            r"\b(?:hp|probook\s+4\s+g1i(?:\s+14)?)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "dell-inspiron-14-7440",
+        re.compile(
+            r"\b(?:dell|inspiron\s+14(?:\s+2[- ]in[- ]1)?|7440)\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
 
 BUTTON_LAPTOP = "Laptop"
 BUTTON_PHONE = "Phone"
@@ -28,10 +163,7 @@ BUTTON_CONTINUE = "Continue"
 BUTTON_ESSAYS_RESEARCH = "Essays & research"
 BUTTON_COMPUTER_SCIENCE = "Coding / computer science"
 BUTTON_CREATIVE_PROJECTS = "Design / video projects"
-BUTTON_SHOW_MATCHES = "Show matching products"
-BUTTON_ADJUST_REQUIREMENTS = "Adjust requirements"
-BUTTON_COMPARE = "Compare 3 options"
-BUTTON_CHOOSE_NOVABOOK = "Choose NovaBook Pro"
+BUTTON_COMPARE = "Compare 5 laptops"
 BUTTON_LAPTOP_ONLY = "Laptop only"
 BUTTON_CUSTOMISE = "Customise"
 BUTTON_EDIT_CART = "Edit cart"
@@ -44,14 +176,10 @@ BUTTON_KEEP_ORDER = "Keep order"
 UNSUPPORTED_CATEGORY_PHONE = "Phones"
 UNSUPPORTED_CATEGORY_ACCESSORIES = "Accessories"
 
-FREE_TEXT_GUIDANCE = "I didn’t catch that. What would you like to change?"
-UNKNOWN_COMMAND_GUIDANCE = "I didn’t recognize that command."
-USE_CASE_REQUIRED_NOTICE = "What will you mainly use it for?"
-SCHOOLWORK_REQUIRED_NOTICE = (
-    "Tell me what kind of schoolwork you do so I can size the laptop properly."
+CHECKOUT_CANCELLED_NOTICE = "Checkout cancelled. <b>No payment was made.</b>"
+CANCELLATION_DISMISSED_NOTICE = (
+    "Cancellation dismissed. <b>Your order is unchanged.</b>"
 )
-CHECKOUT_CANCELLED_NOTICE = "Checkout cancelled. No payment was made."
-CANCELLATION_DISMISSED_NOTICE = "Cancellation dismissed. Your order is unchanged."
 STALE_BUTTON_NOTICE = (
     "That confirmation has expired. Here’s the latest transaction state."
 )
@@ -67,38 +195,50 @@ def money(amount: int) -> str:
     return f"S${amount:,}"
 
 
-def cart_total(include_hub: bool) -> int:
-    return PRODUCT_PRICE + (HUB_PRICE if include_hub else 0)
+def laptop_by_key(key: str) -> Laptop:
+    return LAPTOPS_BY_KEY.get(key, DEFAULT_LAPTOP)
 
 
-def cart_item_description(include_hub: bool) -> str:
+def match_laptop(text: str) -> Laptop | None:
+    matches = {
+        key
+        for key, pattern in LAPTOP_PATTERNS
+        if pattern.search(" ".join(text.casefold().split()))
+    }
+    if len(matches) != 1:
+        return None
+    return laptop_by_key(matches.pop())
+
+
+def cart_total(laptop: Laptop, include_hub: bool) -> int:
+    return laptop.price + (HUB_PRICE if include_hub else 0)
+
+
+def cart_item_description(laptop: Laptop, include_hub: bool) -> str:
     if include_hub:
-        return f"{PRODUCT_NAME} + {HUB_NAME} + {SLEEVE_NAME}"
-    return PRODUCT_NAME
+        return f"{laptop.name} + {HUB_NAME} + {SLEEVE_NAME}"
+    return laptop.name
 
 
 def add_hub_button_label() -> str:
     return f"Add hub · {money(HUB_PRICE)}"
 
 
-def payment_confirmation_button_label(include_hub: bool) -> str:
-    return f"Pay {money(cart_total(include_hub))} with passkey"
+def payment_confirmation_button_label(laptop: Laptop, include_hub: bool) -> str:
+    return f"Verify identity & pay {money(cart_total(laptop, include_hub))}"
 
 
-def cancellation_confirmation_button_label(include_hub: bool) -> str:
-    return f"Cancel order & refund {money(cart_total(include_hub))}"
+def cancellation_confirmation_button_label(laptop: Laptop, include_hub: bool) -> str:
+    return f"Cancel order & refund {money(cart_total(laptop, include_hub))}"
 
 
 def discovery_text(prefix: str | None = None) -> str:
-    text = "What are you looking for today?"
+    text = "<b>What are you looking for today?</b>"
     return f"{prefix}\n\n{text}" if prefix else text
 
 
 def unsupported_category_text(category: str) -> str:
-    return (
-        f"What matters most for the {category.lower()} purchase—how you’ll use it, "
-        "specific features, or budget?"
-    )
+    return f"<b>What matters most for the {category.lower()} purchase?</b>"
 
 
 def use_cases_text(
@@ -106,112 +246,248 @@ def use_cases_text(
     *,
     prefix: str | None = None,
 ) -> str:
-    text = (
-        "What will you mainly use it for—schoolwork, programming, creative work, "
-        "or a mix?"
-    )
+    text = "<b>What will you mainly use it for?</b>"
     return f"{prefix}\n\n{text}" if prefix else text
 
 
 def schoolwork_text(prefix: str | None = None) -> str:
-    text = (
-        "What kind of schoolwork will you do most? For example: essays and "
-        "research, coding, or design and video projects."
-    )
+    text = "<b>What kind of schoolwork will you do most?</b>"
     return f"{prefix}\n\n{text}" if prefix else text
 
 
-def spec_guidance_text(selected: Iterable[str]) -> str:
+def _laptop_table_lines(laptops: Iterable[Laptop]) -> list[str]:
+    def row(
+        name: str,
+        processor: str,
+        ram: str,
+        storage: str,
+        display: str,
+        price: str,
+    ) -> str:
+        return (
+            f"| {name:<27} | {processor:<17} | {ram:<5} | {storage:<6} | "
+            f"{display:<16} | {price:<7} |"
+        )
+
+    lines = [
+        row("Laptop", "CPU", "RAM", "SSD", "Display", "Price"),
+        (
+            "|-----------------------------|-------------------|-------|--------|"
+            "------------------|---------|"
+        ),
+    ]
+    lines.extend(
+        row(
+            laptop.name,
+            laptop.processor,
+            laptop.ram,
+            laptop.storage,
+            laptop.display,
+            money(laptop.price),
+        )
+        for laptop in laptops
+    )
+    return lines
+
+
+def _laptop_table(laptops: Iterable[Laptop]) -> str:
+    return "<pre>" + "\n".join(_laptop_table_lines(laptops)) + "</pre>"
+
+
+def _laptop_table_markdown(laptops: Iterable[Laptop]) -> str:
+    return "\n".join(line.rstrip() for line in _laptop_table_lines(laptops))
+
+
+def _rich_prefix(prefix: str | None) -> str | None:
+    if prefix is None:
+        return None
+    rich = prefix.replace("<b>", "**").replace("</b>", "**")
+    rich = rich.replace("<i>", "_").replace("</i>", "_")
+    rich = rich.replace("<code>", "`").replace("</code>", "`")
+    return html.unescape(re.sub(r"<[^>]+>", "", rich))
+
+
+RANKING_ORDERS = {
+    "coursework": (
+        "acer-aspire-lite-14",
+        "lenovo-ideapad-5a",
+        "microsoft-surface-laptop-13",
+        "hp-probook-4-g1i",
+        "dell-inspiron-14-7440",
+    ),
+    "programming": (
+        "acer-aspire-lite-14",
+        "hp-probook-4-g1i",
+        "lenovo-ideapad-5a",
+        "dell-inspiron-14-7440",
+        "microsoft-surface-laptop-13",
+    ),
+    "video_editing": (
+        "lenovo-ideapad-5a",
+        "dell-inspiron-14-7440",
+        "microsoft-surface-laptop-13",
+        "acer-aspire-lite-14",
+        "hp-probook-4-g1i",
+    ),
+}
+
+RANKING_REASONS = {
+    "coursework": {
+        "acer-aspire-lite-14": (
+            "Lowest price in this set, with strong everyday performance and "
+            "16 GB memory for assignments and research."
+        ),
+        "lenovo-ideapad-5a": (
+            "The large touchscreen and 2-in-1 design are useful for notes, "
+            "presentations and reading."
+        ),
+        "microsoft-surface-laptop-13": (
+            "The compact 13-inch touchscreen is easy to carry between classes, "
+            "but it costs more."
+        ),
+        "hp-probook-4-g1i": (
+            "A practical business-style option with balanced specifications, "
+            "ranked lower because it lacks a touch display."
+        ),
+        "dell-inspiron-14-7440": (
+            "The touchscreen and convertible body are flexible, but its higher "
+            "price weakens its value for general schoolwork."
+        ),
+    },
+    "programming": {
+        "acer-aspire-lite-14": (
+            "Its 8-core Ryzen processor, 16 GB memory and lowest price make it "
+            "the strongest value for coding and coursework."
+        ),
+        "hp-probook-4-g1i": (
+            "The x86 Core Ultra platform and business-focused design are a "
+            "practical fit for development tools and daily projects."
+        ),
+        "lenovo-ideapad-5a": (
+            "It balances 16 GB memory with a large touchscreen and flexible "
+            "2-in-1 form for coding, notes and presentations."
+        ),
+        "dell-inspiron-14-7440": (
+            "The x86 processor and touchscreen suit mixed study work, but it is "
+            "the most expensive option here."
+        ),
+        "microsoft-surface-laptop-13": (
+            "It is compact and responsive, though its Snapdragon ARM platform "
+            "can require compatibility checks for some development tools."
+        ),
+    },
+    "video_editing": {
+        "lenovo-ideapad-5a": (
+            "Its larger touchscreen and convertible design give it the most "
+            "flexible workspace for visual projects."
+        ),
+        "dell-inspiron-14-7440": (
+            "The 2-in-1 touchscreen is useful for hands-on creative work, with "
+            "16 GB memory for moderate projects."
+        ),
+        "microsoft-surface-laptop-13": (
+            "A sharp touchscreen and portable body suit lighter visual work, "
+            "though the screen is smaller."
+        ),
+        "acer-aspire-lite-14": (
+            "The 8-core Ryzen processor offers good value, but the standard "
+            "non-touch display is less flexible for creative work."
+        ),
+        "hp-probook-4-g1i": (
+            "Its specifications are balanced, but the business-focused display "
+            "and form factor are less oriented toward visual projects."
+        ),
+    },
+}
+
+
+def ranking_context(selected: Iterable[str]) -> str:
     selected_set = set(selected)
     if "video_editing" in selected_set:
-        workload = "design and video projects"
-        specs = (
-            "• CPU: recent Core i7 / Ryzen 7 or Apple M-series\n"
-            "• Memory: 16–32 GB RAM\n"
-            "• Storage: 512 GB–1 TB SSD\n"
-            "• Display: 14–15 inch, colour-accurate panel"
-        )
-    elif "programming" in selected_set:
-        workload = "coding and computer-science coursework"
-        specs = (
-            "• CPU: recent Core i5 / Ryzen 5 or Apple M-series\n"
-            "• Memory: 16 GB RAM\n"
-            "• Storage: 512 GB SSD\n"
-            "• Features: good battery life and virtualisation support"
-        )
-    else:
-        workload = "essays, research and everyday coursework"
-        specs = (
-            "• CPU: recent Core i3–i5 or Ryzen 3–5\n"
-            "• Memory: 8–16 GB RAM\n"
-            "• Storage: 256–512 GB SSD\n"
-            "• Features: lightweight design and strong battery life"
-        )
-    return f"ROUGH SPEC RANGE\nFor {workload}:\n\n{specs}"
+        return "video_editing"
+    if "programming" in selected_set:
+        return "programming"
+    return "coursework"
+
+
+def ranked_laptops(selected: Iterable[str]) -> tuple[Laptop, ...]:
+    context = ranking_context(selected)
+    return tuple(laptop_by_key(key) for key in RANKING_ORDERS[context])
+
+
+def ranking_title(selected: Iterable[str]) -> str:
+    context = ranking_context(selected)
+    return {
+        "coursework": "Ranked for schoolwork",
+        "programming": "Ranked for schoolwork and programming",
+        "video_editing": "Ranked for creative school projects",
+    }[context]
+
+
+def ranking_reason(laptop: Laptop, selected: Iterable[str]) -> str:
+    return RANKING_REASONS[ranking_context(selected)][laptop.key]
 
 
 def recommendation_text(selected: Iterable[str]) -> str:
-    selected_set = set(selected)
-    lines = [
-        spec_guidance_text(selected),
-        "",
-        "AVAILABLE PRODUCTS MATCHING THAT RANGE",
-        "",
-    ]
-    if selected_set == {"coursework"}:
-        lines.extend(
-            [
-                "• StudyLite 13 — S$749",
-                "  8 GB RAM · 256 GB SSD · up to 14-hour battery",
-                "",
-            ]
-        )
-    lines.extend(
-        [
-            f"• {PRODUCT_NAME} — {money(PRODUCT_PRICE)}",
-            f"  {PRODUCT_SPECS} · best overall match",
-        ]
-    )
-    if "video_editing" in selected_set:
+    selected_values = tuple(selected)
+    lines = [f"<b>AVAILABLE LAPTOPS — {ranking_title(selected_values).upper()}</b>"]
+    for rank, laptop in enumerate(ranked_laptops(selected_values), start=1):
         lines.extend(
             [
                 "",
-                "• CreatorMax 15 — S$1,099",
-                "  16 GB RAM · 1 TB SSD · stronger graphics",
+                f"<b>{rank}. {laptop.name} — {money(laptop.price)}</b>",
+                (
+                    f"<code>{laptop.processor} · {laptop.ram} RAM · "
+                    f"{laptop.storage} SSD · {laptop.display}</code>"
+                ),
+                ranking_reason(laptop, selected_values),
             ]
         )
-    elif "programming" in selected_set:
-        lines.extend(
-            [
-                "",
-                "• CodeMate Air 14 — S$949",
-                "  16 GB RAM · 512 GB SSD · 15-hour battery",
-            ]
-        )
-    lines.extend(
-        [
-            "",
-            f"Recommended: {PRODUCT_NAME}. It meets the range while staying under S$1,000.",
-        ]
-    )
     return "\n".join(lines)
 
 
+def recommendation_rich_html(
+    selected: Iterable[str],
+    prefix: str | None = None,
+) -> str:
+    selected_values = tuple(selected)
+    parts: list[str] = []
+    rich_prefix = _rich_prefix(prefix)
+    if rich_prefix:
+        parts.append(f"<p>{html.escape(rich_prefix)}</p>")
+    parts.append(f"<h2>{html.escape(ranking_title(selected_values))}</h2>")
+    for rank, laptop in enumerate(ranked_laptops(selected_values), start=1):
+        product_url = html.escape(laptop.source_url, quote=True)
+        image_url = html.escape(laptop.image_url, quote=True)
+        specs = (
+            f"{laptop.processor} · {laptop.ram} RAM · {laptop.storage} SSD · "
+            f"{laptop.display}"
+        )
+        parts.append(
+            "<figure>"
+            f'<img src="{image_url}"/>'
+            "<figcaption>"
+            f'<a href="{product_url}"><b>{rank}. {html.escape(laptop.name)}</b></a>'
+            f" — <b>{money(laptop.price)}</b><br>"
+            f"{html.escape(specs)}<br>"
+            f"<b>Why #{rank}:</b> {html.escape(ranking_reason(laptop, selected_values))}"
+            "</figcaption>"
+            "</figure>"
+        )
+    return "\n".join(parts)
+
+
 def comparison_text() -> str:
-    return (
-        "Here’s how the three options compare:\n\n"
-        "• StudyLite 13 — S$749\n"
-        "  8 GB RAM · 256 GB SSD — fine for coursework, limited for Docker.\n\n"
-        f"• {PRODUCT_NAME} — {money(PRODUCT_PRICE)}\n"
-        f"  {PRODUCT_SPECS} — best balance for coursework and programming.\n\n"
-        "• CreatorMax 15 — S$1,099\n"
-        "  16 GB RAM · 1 TB SSD — stronger for editing, but over budget."
-    )
+    return f"<b>LAPTOP COMPARISON</b>\n\n{_laptop_table(LAPTOPS)}"
+
+
+def comparison_markdown() -> str:
+    return f"## Laptop comparison\n\n{_laptop_table_markdown(LAPTOPS)}"
 
 
 def bundle_text(prefix: str | None = None) -> str:
     text = (
-        "Optional Student Developer Bundle\n\n"
+        "<b>STUDENT DEVELOPER BUNDLE</b>\n\n"
         f"Add a {HUB_NAME} for {money(HUB_PRICE)} and receive a "
         f"{SLEEVE_NAME} at no extra charge. The hub is useful "
         "for an external monitor and accessories."
@@ -219,15 +495,22 @@ def bundle_text(prefix: str | None = None) -> str:
     return f"{prefix}\n\n{text}" if prefix else text
 
 
-def customise_text() -> str:
-    return f"The available laptop configuration is {PRODUCT_SPECS}."
+def customise_text(laptop: Laptop) -> str:
+    return (
+        f"The available {laptop.name} configuration is "
+        f"<code>{laptop.ram} RAM · {laptop.storage} SSD</code>."
+    )
 
 
-def checkout_text(include_hub: bool, prefix: str | None = None) -> str:
+def checkout_text(
+    laptop: Laptop,
+    include_hub: bool,
+    prefix: str | None = None,
+) -> str:
     lines = [
-        "CHECKOUT PREVIEW",
-        f"Merchant: {MERCHANT_NAME}",
-        f"{PRODUCT_NAME}: {money(PRODUCT_PRICE)}",
+        "<b>CHECKOUT PREVIEW</b>",
+        f"Merchant: <b>{MERCHANT_NAME}</b>",
+        f"{laptop.name}: <b>{money(laptop.price)}</b>",
     ]
     if include_hub:
         lines.extend(
@@ -238,46 +521,68 @@ def checkout_text(include_hub: bool, prefix: str | None = None) -> str:
         )
     lines.extend(
         [
-            "Delivery: Free",
-            f"TOTAL: {money(cart_total(include_hub))}",
+            "Delivery: <b>Free</b>",
+            f"<b>TOTAL: {money(cart_total(laptop, include_hub))}</b>",
             "",
-            "NO PAYMENT HAS BEEN MADE.",
+            "<b>NO PAYMENT HAS BEEN MADE</b>",
         ]
     )
     text = "\n".join(lines)
     return f"{prefix}\n\n{text}" if prefix else text
 
 
-def visa_text(include_hub: bool) -> str:
+def visa_text(laptop: Laptop, include_hub: bool) -> str:
     return (
-        "VISA SECURE PAYMENT\n"
-        f"Item: {cart_item_description(include_hub)}\n"
-        f"Pay {money(cart_total(include_hub))} to {MERCHANT_NAME}\n"
-        f"{MASKED_CARD}\n\n"
-        "Full card details are handled outside the AI.\n"
-        "No payment is made unless device authentication succeeds."
+        "<b>SECURE PAYMENT AUTHORIZATION</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "<b>ORDER SUMMARY</b>\n"
+        f"<b>{MERCHANT_NAME}</b>\n"
+        f"{cart_item_description(laptop, include_hub)}\n"
+        f"Total: <b>{money(cart_total(laptop, include_hub))}</b>\n"
+        "1 item · shipping and tax included\n"
+        f"{SHIPPING_ADDRESS}\n\n"
+        "<b>PAYMENT METHOD</b>\n"
+        f"<code>{MASKED_CARD}</code>  ·  Passkey active\n\n"
+        "Verify your identity to authorize this purchase.\n"
+        "<i>No payment is made unless device authentication succeeds.</i>\n\n"
+        "<b>Secured by Visa</b>"
     )
 
 
-def order_text(include_hub: bool, prefix: str | None = None) -> str:
+def order_text(
+    laptop: Laptop,
+    include_hub: bool,
+    prefix: str | None = None,
+) -> str:
     text = (
-        "Payment approved. Order confirmed.\n"
-        f"Order: {ORDER_ID} · Status: Preparing\n"
-        f"Amount: {money(cart_total(include_hub))}"
+        "<b>PURCHASE SUCCESSFUL</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"{MERCHANT_NAME}\n"
+        f"Item: <b>{laptop.name}</b>\n"
+        f"Amount: <b>{money(cart_total(laptop, include_hub))}</b>\n"
+        f"Order: <code>{ORDER_ID}</code>\n"
+        f"Tracking: <code>{TRACKING_CODE}</code>\n"
+        f"<code>{MASKED_CARD}</code>\n\n"
+        "<b>Preparing</b>"
     )
     return f"{prefix}\n\n{text}" if prefix else text
 
 
 def tracking_text() -> str:
-    return f"Order {ORDER_ID} is currently Preparing."
+    return (
+        "<b>ORDER TRACKING</b>\n"
+        f"Order <code>{ORDER_ID}</code> is currently <b>Preparing</b>.\n"
+        f"Tracking: <code>{TRACKING_CODE}</code>"
+    )
 
 
-def receipt_text(include_hub: bool) -> str:
+def receipt_text(laptop: Laptop, include_hub: bool) -> str:
     lines = [
-        "RECEIPT",
-        f"Merchant: {MERCHANT_NAME}",
-        f"Order: {ORDER_ID}",
-        f"{PRODUCT_NAME}: {money(PRODUCT_PRICE)}",
+        "<b>RECEIPT</b>",
+        "━━━━━━━━━━━━━━━━━━",
+        f"{MERCHANT_NAME}",
+        f"Order: <code>{ORDER_ID}</code>",
+        f"{laptop.name}: <b>{money(laptop.price)}</b>",
     ]
     if include_hub:
         lines.extend(
@@ -288,30 +593,32 @@ def receipt_text(include_hub: bool) -> str:
         )
     lines.extend(
         [
-            "Delivery: Free",
-            f"Amount paid: {money(cart_total(include_hub))}",
-            MASKED_CARD,
-            "Status: Preparing",
+            "Delivery: <b>Free</b>",
+            f"Amount paid: <b>{money(cart_total(laptop, include_hub))}</b>",
+            f"<code>{MASKED_CARD}</code>",
+            f"Tracking: <code>{TRACKING_CODE}</code>",
+            "Status: <b>Preparing</b>",
         ]
     )
     return "\n".join(lines)
 
 
-def cancellation_preview_text(include_hub: bool) -> str:
+def cancellation_preview_text(laptop: Laptop, include_hub: bool) -> str:
     return (
-        "CANCELLATION PREVIEW\n"
-        f"Item being cancelled: {cart_item_description(include_hub)}\n"
-        f"Refund amount: {money(cart_total(include_hub))}\n"
-        f"{MASKED_CARD}\n\n"
-        "No cancellation has happened yet."
+        "<b>CANCELLATION PREVIEW</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"Item: {cart_item_description(laptop, include_hub)}\n"
+        f"Refund: <b>{money(cart_total(laptop, include_hub))}</b>\n"
+        f"To: <code>{MASKED_CARD}</code>\n\n"
+        "<i>No cancellation has happened yet.</i>"
     )
 
 
-def cancellation_complete_text(include_hub: bool) -> str:
+def cancellation_complete_text(laptop: Laptop, include_hub: bool) -> str:
     return (
-        "Order cancelled.\n"
-        f"Refund: {money(cart_total(include_hub))} initiated · "
-        f"Reference: {REFUND_REFERENCE}\n\n"
+        "<b>ORDER CANCELLED</b>\n\n"
+        f"Refund: <b>{money(cart_total(laptop, include_hub))}</b> initiated\n"
+        f"Reference: <code>{REFUND_REFERENCE}</code>\n\n"
         "The payment service chooses a reversal, void, or refund based on payment "
         "state."
     )

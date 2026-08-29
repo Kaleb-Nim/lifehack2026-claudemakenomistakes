@@ -64,44 +64,137 @@
       button:disabled { opacity: 0.55; }
       #status { min-height: 42px; margin: 16px 2px 0; font-size: 14px; line-height: 1.45; }
       .fine-print { margin: 18px 2px 0; font-size: 12px; line-height: 1.5; }
+
+      .biometric-overlay {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgb(3 11 28 / 72%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease;
+      }
+
+      .biometric-overlay.active { opacity: 1; pointer-events: auto; }
+
+      .biometric-card {
+        width: min(100%, 360px);
+        padding: 28px 24px;
+        border-radius: 24px;
+        color: #14213a;
+        background: #ffffff;
+        text-align: center;
+        box-shadow: 0 24px 80px rgb(0 0 0 / 30%);
+        transform: translateY(12px) scale(0.98);
+        transition: transform 180ms ease;
+      }
+
+      .biometric-overlay.active .biometric-card { transform: translateY(0) scale(1); }
+
+      .scan-ring {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 112px;
+        height: 112px;
+        margin: 0 auto 20px;
+        border: 2px solid #b9cdfd;
+        border-radius: 50%;
+        color: #175cff;
+        background: #eef4ff;
+        overflow: hidden;
+      }
+
+      .scan-ring svg { width: 66px; height: 66px; }
+      .biometric-card h2 { margin: 0; font-size: 22px; }
+      .biometric-card p { min-height: 22px; margin: 10px 0 0; color: #60708a; }
+
+      .biometric-overlay.success .scan-ring {
+        color: #08783e;
+        border-color: #9ad6b8;
+        background: #eaf8f1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .biometric-overlay,
+        .biometric-card { transition: none; }
+      }
     </style>
   </head>
   <body>
     <main>
-      <p class="eyebrow">Visa secure confirmation</p>
-      <h1>Confirm your payment</h1>
+      <p class="eyebrow">Secured by Visa</p>
+      <h1>Secure Payment Authorization</h1>
+      <p class="muted">Verify your identity to complete this purchase securely.</p>
 
       <section class="summary" aria-label="Transaction summary">
         <div class="row"><span class="muted">Merchant</span><strong>Nova Electronics</strong></div>
+        <div class="row"><span class="muted">Item</span><strong id="product">Selected laptop</strong></div>
         <div class="row"><span class="muted">Card</span><strong>Visa ···· 4242</strong></div>
-        <div class="row"><span class="muted">Action</span><span id="confirmation" class="amount">Confirm payment</span></div>
+        <div class="row"><span class="muted">Total</span><span id="confirmation" class="amount">Confirm payment</span></div>
       </section>
 
-      <button id="authenticate" type="button">Confirm with device biometrics</button>
+      <button id="authenticate" type="button" disabled>Verify identity &amp; continue</button>
       <p id="status" class="muted" role="status">Checking biometric availability…</p>
       <p class="fine-print muted">
-        Telegram performs local biometric authentication; no card details are exposed to
-        the chat or AI.
+        Identity verification protects against unauthorized purchases. Your biometric data
+        stays on this device, and card details are not exposed to the chat or AI.
       </p>
     </main>
+
+    <section id="biometric-overlay" class="biometric-overlay" aria-hidden="true">
+      <div class="biometric-card" role="dialog" aria-modal="true" aria-labelledby="biometric-title">
+        <div class="scan-ring" aria-hidden="true">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M19 29c0-7 5.8-12.5 13-12.5S45 22 45 29" />
+            <path d="M14 29c0-9.8 8-17.5 18-17.5S50 19.2 50 29" />
+            <path d="M24 30c0-4.4 3.5-8 8-8s8 3.6 8 8c0 10-3 18.5-8.5 23" />
+            <path d="M19 33c.2 11-2.5 16-5 19" />
+            <path d="M45 33c-.2 12-4.5 21-11 26" />
+            <path d="M28 31c0 11-1.5 18-7 25" />
+            <path d="M36 31c0 8-1 14-5 20" />
+          </svg>
+        </div>
+        <h2 id="biometric-title">Verify identity</h2>
+        <p id="biometric-status">Complete the biometric prompt on your device.</p>
+      </div>
+    </section>
 
     <script>
       const webApp = window.Telegram?.WebApp;
       const button = document.getElementById("authenticate");
       const status = document.getElementById("status");
       const confirmation = document.getElementById("confirmation");
-      const label = new URLSearchParams(window.location.search).get("confirmation_label");
+      const biometricOverlay = document.getElementById("biometric-overlay");
+      const biometricStatus = document.getElementById("biometric-status");
+      const query = new URLSearchParams(window.location.search);
+      const label = query.get("confirmation_label");
+      const productName = query.get("product_name");
+      const product = document.getElementById("product");
+      let authenticationMode = "unavailable";
 
-      if (label) confirmation.textContent = label;
+      if (label) {
+        const amount = label.match(/S\$[\d,]+(?:\.\d{2})?/i)?.[0];
+        confirmation.textContent = amount || label;
+        button.textContent = label;
+      }
+      if (productName) product.textContent = productName;
 
       function setStatus(message, disabled = false) {
         status.textContent = message;
         button.disabled = disabled;
       }
 
+      function haptic(kind) {
+        if (!webApp?.isVersionAtLeast?.("6.1")) return;
+        if (kind === "success") webApp.HapticFeedback.notificationOccurred("success");
+        else webApp.HapticFeedback.impactOccurred("medium");
+      }
+
       function completeAuthorization(method) {
         setStatus("Identity confirmed. Returning to Telegram…", true);
-        webApp.HapticFeedback?.notificationOccurred("success");
         webApp.sendData(JSON.stringify({
           type: "biometric_confirmation",
           status: "authorized",
@@ -110,69 +203,101 @@
         }));
       }
 
+      function showBiometricPrompt() {
+        button.disabled = true;
+        biometricOverlay.classList.add("active");
+        biometricOverlay.classList.remove("success");
+        biometricOverlay.setAttribute("aria-hidden", "false");
+        biometricStatus.textContent = "Complete the biometric prompt on your device.";
+        haptic("start");
+      }
+
+      function hideBiometricPrompt() {
+        biometricOverlay.classList.remove("active", "success");
+        biometricOverlay.setAttribute("aria-hidden", "true");
+      }
+
       function authenticate(manager) {
-        setStatus("Waiting for device authentication…", true);
+        showBiometricPrompt();
         manager.authenticate(
-          { reason: label || "Confirm this payment" },
+          { reason: productName ? `Authorize ${productName}` : "Authorize this payment" },
           (authenticated) => {
-            if (authenticated) completeAuthorization("telegram_biometric");
-            else setStatus("Authentication was cancelled or failed. No payment was made.");
+            if (!authenticated) {
+              hideBiometricPrompt();
+              setStatus("Authentication was cancelled or failed. No payment was made.");
+              return;
+            }
+
+            biometricOverlay.classList.add("success");
+            biometricStatus.textContent = "Identity verified";
+            haptic("success");
+            window.setTimeout(() => completeAuthorization("telegram_biometric"), 450);
           }
         );
       }
 
-      function provisionAndAuthenticate(manager) {
-        const token = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
-        setStatus("Securely enabling biometrics for this bot…", true);
-        manager.updateBiometricToken(token, (updated) => {
-          if (updated) completeAuthorization("telegram_biometric_enrolment");
-          else setStatus("Biometric setup was cancelled or failed. No payment was made.");
-        });
+      function showBiometricSettings() {
+        authenticationMode = "settings";
+        button.textContent = "Open biometric settings";
+        setStatus("Biometric access is disabled for Pluto. Open Telegram settings to enable it.");
       }
 
-      function requestAuthentication() {
-        const manager = webApp?.BiometricManager;
-        if (!manager?.isInited || !manager.isBiometricAvailable) {
-          setStatus("Device biometrics are unavailable in this Telegram client.", true);
+      function refreshBiometricState(manager) {
+        if (!manager?.isInited) return;
+        if (!manager.isBiometricAvailable) {
+          authenticationMode = "unavailable";
+          setStatus("Biometric authentication is unavailable on this device.", true);
+          return;
+        }
+        if (manager.isAccessRequested && !manager.isAccessGranted) {
+          showBiometricSettings();
           return;
         }
 
-        const proceed = () => {
-          if (manager.isBiometricTokenSaved) authenticate(manager);
-          else provisionAndAuthenticate(manager);
-        };
+        authenticationMode = "native";
+        button.textContent = label || (
+          manager.biometricType === "face"
+            ? "Confirm with Face ID"
+            : "Confirm with biometrics"
+        );
+        setStatus("Ready for device biometric authentication.");
+      }
 
-        if (manager.isAccessGranted) proceed();
-        else {
-          setStatus("Telegram needs permission to use device biometrics…", true);
-          manager.requestAccess(
-            { reason: "Confirm payments without exposing card details" },
-            (granted) => {
-              if (granted) proceed();
-              else setStatus("Biometric permission was not granted. No payment was made.");
-            }
-          );
+      function requestAuthentication() {
+        const manager = webApp.BiometricManager;
+        if (authenticationMode === "settings") {
+          manager.openSettings();
+          setStatus("Enable biometric access, then return here to continue.");
+          return;
         }
+        if (authenticationMode !== "native") return;
+        if (manager.isAccessGranted) {
+          authenticate(manager);
+          return;
+        }
+
+        setStatus("Telegram needs permission to use device biometrics…", true);
+        manager.requestAccess(
+          { reason: "Confirm payments without exposing card details" },
+          (granted) => {
+            if (granted) authenticate(manager);
+            else showBiometricSettings();
+          }
+        );
       }
 
       if (!webApp) {
         setStatus("Open this page from the Telegram payment button.", true);
-      } else if (!webApp.isVersionAtLeast("7.2")) {
-        setStatus("Update Telegram to use biometric confirmation.", true);
+      } else if (!webApp.isVersionAtLeast("7.2") || !webApp.BiometricManager) {
+        webApp.ready();
+        setStatus("This Telegram client does not support biometric authentication.", true);
       } else {
         webApp.ready();
         webApp.expand();
-        webApp.BiometricManager.init(() => {
-          const type = webApp.BiometricManager.biometricType;
-          button.textContent = type === "face" ? "Confirm with Face ID" : "Confirm with biometrics";
-          setStatus(
-            webApp.BiometricManager.isBiometricAvailable
-              ? "Your biometric data stays on this device."
-              : "Device biometrics are unavailable in this Telegram client.",
-            !webApp.BiometricManager.isBiometricAvailable
-          );
-        });
+        const manager = webApp.BiometricManager;
         button.addEventListener("click", requestAuthentication);
+        manager.init(() => refreshBiometricState(manager));
+        webApp.onEvent("biometricManagerUpdated", () => refreshBiometricState(manager));
       }
     </script>
   </body>
