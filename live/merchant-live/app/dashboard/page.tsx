@@ -48,7 +48,7 @@ export default async function DashboardPage() {
             {d.configured && !d.error ? "Accepting card payments in agent chats" : "Not connected"}
           </div>
           <div className="text-sm" style={{ color: "var(--color-neutral-700)" }}>
-            {MERCHANT.legalName} · {MERCHANT.outlet}
+            {[MERCHANT.legalName, MERCHANT.outlet].filter(Boolean).join(" · ")}
           </div>
           <a
             href="/bank-setup"
@@ -84,11 +84,13 @@ export default async function DashboardPage() {
 
         <div className="rounded-2xl p-6" style={{ background: "var(--color-text)", color: "var(--color-neutral-100)" }}>
           <div className="text-sm" style={{ color: "var(--color-neutral-400)" }}>
-            Next payout · {MERCHANT.nextPayout}
+            {MERCHANT.nextPayout ? `Next payout · ${MERCHANT.nextPayout}` : "Next payout"}
           </div>
           <div className="mt-2 text-4xl font-semibold tracking-tight">{money(d.payoutCents)}</div>
           <div className="mt-2 text-sm" style={{ color: "var(--color-neutral-400)" }}>
-            To {MERCHANT.payoutAccount}
+            {MERCHANT.payoutAccount
+              ? `To ${MERCHANT.payoutAccount}`
+              : "No payout account configured"}
           </div>
         </div>
       </section>

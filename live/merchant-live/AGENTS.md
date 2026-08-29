@@ -71,10 +71,34 @@ applied** to the live instance:
 - `source` (`scrape` | `merchant`, default `scrape`) — without it there is no
   way to find, audit or roll back a demo's worth of onboarded products.
 
+## Merchant-agnostic by default
+
+`demo/merchant` pins the identity to Bizgram Asia because its script narrates
+that shop. This app names no one: `lib/merchant-profile.ts` reads
+`MERCHANT_NAME`, `MERCHANT_LEGAL_NAME`, `MERCHANT_OUTLET`,
+`MERCHANT_PAYOUT_ACCOUNT` and `MERCHANT_NEXT_PAYOUT` from the environment, all
+optional, defaulting to "Your shop" with the payout fields blank.
+
+`MERCHANT.matchToken` defaults to `*` — every merchant. An unconfigured
+deployment that silently filtered to a hardcoded shop would either look empty
+or, worse, show one merchant another merchant's orders.
+
+These are plain (non-`NEXT_PUBLIC_`) env vars, so they are **server only**.
+Every importer today is a Server Component or server module; pass values down
+as props rather than importing this into a Client Component.
+
+`/api/catalog` was already agnostic — it requires `merchantName` per request
+and has no default.
+
 ## Still canned
 
 The fork did **not** make extraction real. `lib/canned-extracts.ts` still
-returns fixed card text; the live part is the catalogue write. Wiring the
+returns fixed card text; the live part is the catalogue write.
+
+`lib/merchant-data.ts` and `lib/agent-script.ts` also still narrate Bizgram in
+the scripted onboarding conversation — the captions, transcript and agent
+lines. Those are demo content, not identity: making them agnostic means
+replacing the script with real extraction, not a find-and-replace. Wiring the
 onboarding UI to call `POST /api/catalog` at the point the merchant confirms is
 the remaining step.
 

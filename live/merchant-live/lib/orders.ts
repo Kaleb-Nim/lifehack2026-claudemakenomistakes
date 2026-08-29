@@ -33,13 +33,18 @@ const FEE_RATE = 0.021;
 const TZ = "Asia/Singapore";
 
 // Substring match, case-insensitive, so the dashboard finds the merchant
-// however the catalogue spells it — "Bizgram Asia", "Bizgram Asia Pte Ltd",
-// "BIZGRAM ASIA PTE. LTD." all match the token "bizgram". Override with
-// MERCHANT_NAME in .env.local; "*" shows every merchant.
-// An unset OR blank MERCHANT_NAME both fall back to the canonical token —
-// "" is a string, so ?? alone would leave an empty match that matches every row.
-const MATCH =
-  (process.env.MERCHANT_NAME?.trim() || MERCHANT.matchToken).toLowerCase();
+// however the orders table spells it — "Hock Seng", "Hock Seng Electronics",
+// "HOCK SENG ELECTRONICS PTE. LTD." all match the token "hock seng".
+//
+// Set MERCHANT_NAME to scope the dashboard to one shop; unset (or "*") shows
+// every merchant. This app is merchant-agnostic, so showing everything is the
+// right default: an unconfigured deployment that silently filtered to some
+// hardcoded shop would either look empty or, worse, show one merchant another
+// merchant's orders.
+//
+// MERCHANT.matchToken already applies that fallback; reading it here rather
+// than re-deriving keeps one source of truth.
+const MATCH = MERCHANT.matchToken;
 
 function sgParts(iso: string) {
   const d = new Date(iso);

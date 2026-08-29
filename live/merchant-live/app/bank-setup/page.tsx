@@ -5,8 +5,14 @@ export const metadata = { title: `${MERCHANT.product} · Payment setup` };
 // Simulated. No bank details are transmitted or stored anywhere — this screen
 // exists so the demo can show the step between onboarding and the dashboard.
 const FIELDS = [
-  { label: "Registered business name", value: MERCHANT.legalName, readOnly: true },
-  { label: "Business address", value: MERCHANT.outlet, readOnly: true },
+  // Read-only only once a merchant is configured; otherwise these become
+  // ordinary inputs rather than fields prefilled with someone else's shop.
+  MERCHANT.isConfigured
+    ? { label: "Registered business name", value: MERCHANT.legalName, readOnly: true }
+    : { label: "Registered business name", placeholder: "As registered with ACRA" },
+  MERCHANT.outlet
+    ? { label: "Business address", value: MERCHANT.outlet, readOnly: true }
+    : { label: "Business address", placeholder: "Unit, street, postal code" },
   { label: "Bank", placeholder: "DBS Bank" },
   { label: "Account number", placeholder: "000-000000-0" },
   { label: "Account holder name", placeholder: "As printed on your bank statement" },

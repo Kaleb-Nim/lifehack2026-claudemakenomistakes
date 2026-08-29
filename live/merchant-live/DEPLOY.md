@@ -25,7 +25,8 @@ ever take a `NEXT_PUBLIC_` prefix.
 | `CATALOG_DATABASE_URL` | Railway Postgres+ParadeDB `DATABASE_PUBLIC_URL`. The catalogue, **not** Supabase. |
 | `SUPABASE_URL` | `https://yvcwzialpcdcrctxacpc.supabase.co` |
 | `SUPABASE_SERVICE_KEY` | service_role key. Bypasses RLS — server only. |
-| `MERCHANT_NAME` | Whose orders the dashboard shows. `Bizgram Asia Pte Ltd`, or `*` for all. |
+| `MERCHANT_NAME` | *Optional.* Scopes the dashboard to one shop (substring, case-insensitive). Unset or `*` shows every merchant. |
+| `MERCHANT_LEGAL_NAME`, `MERCHANT_OUTLET`, `MERCHANT_PAYOUT_ACCOUNT`, `MERCHANT_NEXT_PAYOUT` | *Optional.* Displayed on the dashboard and prefilled in bank setup. Omit them and the app names no shop. |
 | `OPENAI_REALTIME_MODEL` | Optional; defaults to `gpt-realtime`. |
 | `OPENAI_REALTIME_VOICE` | Optional; defaults to `marin`. |
 
@@ -62,7 +63,7 @@ but file upload will not behave as it does locally.
 ## 4. Verify after deploying
 
 ```sh
-curl "https://<your-deployment>/api/catalog?merchantName=Bizgram%20Asia%20Pte%20Ltd"
+curl "https://<your-deployment>/api/catalog?merchantName=Your%20Shop%20Name"
 ```
 
 Should return the products currently live. Then publish one and ask the
