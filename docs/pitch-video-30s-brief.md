@@ -10,16 +10,17 @@ Casting: **Kaleb** on camera throughout, **all four of us** for the close. The a
 
 | Time | Shot | Line |
 |---|---|---|
-| **0:00–0:08** | Kaleb to camera. Cut to a phone: someone asking an AI assistant for a laptop, results are all big retailers. | **KALEB:** "Ask an AI to find you a laptop today. It'll never send you to a small shop — because small shops aren't readable to an agent." |
-| **0:08–0:17** | Kaleb in his shop, gestures at the shelf, picks up an HP box. | **KALEB:** "I run an electronics shop. Hundreds of products. My bestseller is this HP laptop — and if you asked an agent for it, you'd never find me." |
-| **0:17–0:22** | Kaleb turns to the screen. Pluto's onboarding UI, waveform idle. | **KALEB:** "So we built Pluto. Watch — I'm going to list that laptop just by talking." |
-| **0:22–0:27** | Waveform active. Panels empty. | **KALEB:** "Hi Pluto, help me list my products." · **PLUTO:** "Sure — what's your shop called?" |
+| **0:00–0:08** | Kaleb to camera. Cut to a phone: someone asking an AI assistant for a laptop, results are all big retailers. | **KALEB:** "Electronics is all over the place can'
+t find a " |
+| **0:08–0:17** | Kaleb in his shop, gestures at the shelf, picks up an HP box. | **KALEB:** "I run an electronics shop. Hundreds of products. My bestseller is this HP laptop." |
+| **0:17–0:22** | Kaleb turns to the screen. Pluto's onboarding UI, waveform idle. | **KALEB:** "So we built Pluto. Watch — I'm going to list my company products just by talking in a few mins." |
+| **0:22–0:27** | Waveform active. Panels empty. | **PLUTO:** "hi let's onboard u to the xxxxxx what's your shop called?"  **KALEB:** "Hi Pluto, lets do it." |
 | **0:27–0:33** | — | **KALEB:** "Hock Seng Electronics. Sim Lim and Bedok." · **PLUTO:** "Give me a second, let me look you up." |
 | **0:33–0:38** | `[SCREEN]` **Searching — "Hock Seng Electronics Singapore"** *(loading, 5s)* | — |
-| **0:38–0:47** | Context column fills as it speaks. | **PLUTO:** "Found you. Google listing for Sim Lim, four-point-three stars. Carousell, sixty-one items. A Facebook page that stopped in 2023. Your Bedok shop isn't online anywhere." |
-| **0:47–0:50** | **Hold on Kaleb's face.** Beat. He looks at camera. | **KALEB:** "…I didn't know that." |
+| **0:38–0:47** | Context column fills as it speaks. | **PLUTO:** "Found you. Google listing for Sim Lim, four-point-three stars[insert link to google map thingy]. Carousell, sixty-one items. Also a shopify store weblisting. Confirm if this is your biz?" |
+| **0:47–0:50** | **Hold on Kaleb's face.** Beat. He looks at camera. | **KALEB:** "Yes correct. Oh wait I have a new batch of products." |
 | **0:50–0:55** | Kaleb drags files in. `[SCREEN]` files land in the column. | **KALEB:** "Here's my latest stock." |
-| **0:55–1:05** | `[SCREEN]` image thumbnails; one flagged. | **PLUTO:** "Got it. The HP — I can see the box, but the model sticker's turned away. Turn it and shoot the side? The model number is what people search for." |
+| **0:55–1:05** | `[SCREEN]` image thumbnails; one flagged. | **PLUTO:** "Got it 20 more listings. The HP — I can see the box, but the model sticker's turned away. Turn it and shoot the side? The model number is what people look for" |
 | **1:05–1:10** | Kaleb turns the box, phone snap. `[SCREEN]` listing completes. | **PLUTO:** "HP Pavilion 15. Listed." |
 | **1:10–1:22** | Camera pans to all four of us. | **KALEB:** "That's it. Five minutes of talking and a shop is live. Link your Visa gateway, and customers can find you and pay — all in one chat. Here's what that looks like—" |
 
