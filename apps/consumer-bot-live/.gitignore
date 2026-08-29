@@ -1,0 +1,6 @@
+.env
+.venv/
+bot.log
+__pycache__/
+*.py[cod]
+.ruff_cache/
