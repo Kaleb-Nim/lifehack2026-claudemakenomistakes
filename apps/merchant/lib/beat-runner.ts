@@ -58,6 +58,13 @@ export interface BeatRunnerApi {
   beatNumber: number;
   /** Total beat count (BEATS.length). */
   beatTotal: number;
+  /**
+   * The live caption bubble's text (UI-SPEC §2), or `null` when nothing should render — no
+   * turn open, a turn too short to clear MIN_SPEECH_MS (a cough), or the beat has already
+   * advanced past the turn that produced it. `""` (turn open, no delta yet) is distinct from
+   * `null` but both render no bubble; components/Onboarding.tsx only needs the truthiness.
+   */
+  caption: string | null;
 }
 
 /**
@@ -68,6 +75,14 @@ export interface BeatRunnerApi {
  */
 export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObject<HTMLAudioElement | null>): BeatRunnerApi {
   const [beatIndex, setBeatIndex] = useState(-1);
+  /**
+   * Hides the caption bubble regardless of what hooks/useRealtimeSession.ts has accumulated
+   * — set the moment a turn is judged too short to clear MIN_SPEECH_MS (so a cough or "mm"
+   * never flashes one word), and again once the beat that turn belonged to actually
+   * advances (so the bubble unmounts with the frame, not later). Cleared at the start of
+   * every fresh owner turn.
+   */
+  const [captionSuppressed, setCaptionSuppressed] = useState(false);
   const currentBeatRef = useRef<Beat | null>(null);
   /** When the current beat became current — the clock a `minDwellMs` is measured against. */
   const beatEnteredAtRef = useRef(0);
@@ -158,6 +173,9 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       fireTools(beat);
       const { go, idx } = onboardingRef.current;
       go(idx + 1);
+      // The caption belongs to the beat that just ended — unmount it with the frame, not
+      // whenever the owner's next turn happens to start.
+      setCaptionSuppressed(true);
       const nextBeat = BEATS[beatIndexOf(beat.key) + 1];
       if (nextBeat) enterBeat(nextBeat);
     }, SETTLE_MS);
@@ -203,6 +221,10 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     }
 
     if (event.type === "input_audio_buffer.speech_started") {
+      // A fresh turn — the caption bubble (if any) is allowed to show again; the underlying
+      // text itself is reset by hooks/useRealtimeSession.ts on this same event.
+      setCaptionSuppressed(false);
+
       // Echo rejection. Speech that begins while the agent is talking, or in the short tail
       // after it stops, is the agent's own audio coming back through the speakers — not the
       // owner. Recording without a headset produces this on every single beat.
@@ -223,14 +245,17 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       // wall-clock span between the two events over-reports the real speech by that much.
       // Subtracting it is what makes both thresholds below mean what they say.
       const spokenMs = Date.now() - startedAt - VAD_SILENCE_DURATION_MS;
-      if (spokenMs < MIN_REPLY_MS) return; // a cough or an "mm" — no reply, no advance
+      if (spokenMs < MIN_REPLY_MS) { setCaptionSuppressed(true); return; } // a cough or an "mm" — no reply, no advance, no caption
 
       // Replying and advancing are separate questions. Every qualifying turn gets a
       // response; only a turn past MIN_SPEECH_MS on a beat that is itself waiting on speech
       // also moves the take — a beat waiting on an upload, a pill, an operator action, or
       // the agent's own audio ignores speech for advancing entirely, on any length of turn.
       sendResponseCreate();
-      if (spokenMs < MIN_SPEECH_MS) return; // answered, but too short to advance the frame
+      // The caption display gate is MIN_SPEECH_MS, not MIN_REPLY_MS (UI-SPEC §2): a turn
+      // that does not advance the frame leaves no caption behind either, even though it may
+      // still get a spoken reply.
+      if (spokenMs < MIN_SPEECH_MS) { setCaptionSuppressed(true); return; }
 
       const beat = currentBeatRef.current;
       if (!beat || beat.advanceOn !== "speech_stopped") return;
@@ -280,5 +305,6 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     notify,
     beatNumber: beatIndex + 1,
     beatTotal: BEATS.length,
+    caption: captionSuppressed ? null : session.caption,
   };
 }

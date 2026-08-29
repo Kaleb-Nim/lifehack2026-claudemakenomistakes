@@ -76,6 +76,13 @@ export default function Onboarding() {
 
   const caption = useTypewriter(frame.caption);
   const typing = !!frame.caption && caption.length < frame.caption.length;
+  // Voice mode: the caption block is driven by the runner's real transcript instead of the
+  // fixed-text typewriter (VOICE-03) — visible whenever there is owner speech to show, caret
+  // blinking only while the turn is still open (session.hearing). Scripted mode's condition
+  // and useTypewriter output are untouched, byte for byte.
+  const captionText = voice.phase === "live" ? (voice.caption ?? "") : caption;
+  const captionVisible = voice.phase === "live" ? !!voice.caption : (!!frame.caption && !live && !voiceActive);
+  const captionCaretOn = voice.phase === "live" ? voice.hearing : true;
   // Real session states take priority; a session that never started (idle) or that
   // dropped back to scripted mode falls through to the exact Phase 1 derivation
   // (UI-SPEC §1, priority table row 5) — one chain, no parallel orb-state variable.
@@ -152,9 +159,9 @@ export default function Onboarding() {
             <div className="centre-text">
               <div className="orb-label">{orbLabel}</div>
               <div className="agent-line" key={agentLine}>{agentLine}</div>
-              {frame.caption && !live && !voiceActive && (
+              {captionVisible && (
                 <div className="caption">
-                  <div className="caption-text">{caption}<span className="caret" /></div>
+                  <div className="caption-text">{captionText}{captionCaretOn && <span className="caret" />}</div>
                 </div>
               )}
               {frame.pills && !live && (

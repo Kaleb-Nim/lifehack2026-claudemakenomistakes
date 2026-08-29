@@ -31,6 +31,15 @@ export interface RealtimeSessionApi {
   send: (event: RealtimeEvent) => void;
   toggleMute: () => void;
   /**
+   * The owner's transcript for the open (or just-closed) turn — real `state`, not a ref,
+   * because every delta should re-render `.caption-text` as it arrives, paced by the
+   * owner's own speech rather than an artificial cps. Reset to "" on
+   * `input_audio_buffer.speech_started`; grown by transcription deltas; corrected in place
+   * by the completed event's authoritative full transcript. Never gates a beat — decorative
+   * only (lib/beat-runner.ts applies the MIN_SPEECH_MS display gate on top of this).
+   */
+  caption: string;
+  /**
    * The last EVENT_LOG_MAX raw server events, newest last, for operator debugging (plan
    * 02-03's status chip). A ref, not state — mutated in place so a fast event stream never
    * forces a re-render; nothing on stage reads this.
@@ -45,6 +54,13 @@ export interface UseRealtimeSessionOptions {
 
 const CALLS_URL = "https://api.openai.com/v1/realtime/calls";
 const EVENT_LOG_MAX = 50;
+
+// Matched by suffix, not by an exact literal — 02-RESEARCH.md pins the session config shape
+// but not the server event names, so a namespace change (the full type today is
+// `conversation.item.input_audio_transcription.delta` / `…completed`) degrades to a missing
+// caption rather than a crash. The caption is decorative and never gates a beat.
+const TRANSCRIPTION_DELTA_SUFFIX = "input_audio_transcription.delta";
+const TRANSCRIPTION_COMPLETED_SUFFIX = "input_audio_transcription.completed";
 
 function isPermissionError(err: unknown): boolean {
   return err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError" || err.name === "SecurityError");
@@ -62,6 +78,7 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
   const [muted, setMuted] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [hearing, setHearing] = useState(false);
+  const [caption, setCaption] = useState("");
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -89,6 +106,7 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
     setFailure(f);
     setSpeaking(false);
     setHearing(false);
+    setCaption("");
   }, [teardown]);
 
   const handleServerMessage = useCallback((raw: string) => {
@@ -102,8 +120,18 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
     if (eventsRef.current.length > EVENT_LOG_MAX) eventsRef.current.shift();
     if (event.type === "output_audio_buffer.started") setSpeaking(true);
     if (event.type === "output_audio_buffer.stopped" || event.type === "output_audio_buffer.cleared") setSpeaking(false);
-    if (event.type === "input_audio_buffer.speech_started") setHearing(true);
+    if (event.type === "input_audio_buffer.speech_started") { setHearing(true); setCaption(""); }
     if (event.type === "input_audio_buffer.speech_stopped") setHearing(false);
+    if (typeof event.type === "string" && event.type.endsWith(TRANSCRIPTION_DELTA_SUFFIX)) {
+      const delta = typeof event.delta === "string" ? event.delta : "";
+      if (delta) setCaption((c) => c + delta);
+    }
+    if (typeof event.type === "string" && event.type.endsWith(TRANSCRIPTION_COMPLETED_SUFFIX)) {
+      // The completed event's `transcript` is the authoritative full text — an in-place
+      // correction of whatever the incremental deltas accumulated to, applied as a single
+      // swap (no per-character animation, no strikethrough).
+      if (typeof event.transcript === "string") setCaption(event.transcript);
+    }
     onEventRef.current?.(event);
   }, []);
 
@@ -251,5 +279,5 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
 
   useEffect(() => teardown, [teardown]);
 
-  return { phase, failure, muted, speaking, hearing, connect, disconnect, send, toggleMute, events: eventsRef };
+  return { phase, failure, muted, speaking, hearing, connect, disconnect, send, toggleMute, caption, events: eventsRef };
 }
