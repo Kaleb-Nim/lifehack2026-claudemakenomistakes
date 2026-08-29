@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
 from collections.abc import Callable
@@ -13,13 +14,23 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from agent.tool_schemas import ALL_TOOLS
-from tools import buy_and_pay, cancel_order, check_order_status, product_discovery
+from db import memory_db
+from tools import (
+    buy_and_pay,
+    cancel_order,
+    check_order_status,
+    product_discovery,
+    remember,
+)
+
+logger = logging.getLogger(__name__)
 
 TOOL_DISPATCH: dict[str, Callable[..., Any]] = {
     "product_discovery": product_discovery.run,
     "buy_and_pay": buy_and_pay.run,
     "check_order_status": check_order_status.run,
     "cancel_order": cancel_order.run,
+    "remember": remember.run,
 }
 
 SYSTEM_PROMPT = """\
@@ -36,6 +47,10 @@ Rules:
   market price ranges, availability assumptions, or tool results. Base those
   claims only on tool output; do not fill a failed search with general market
   knowledge.
+- When the shopper states something lasting about themselves - a platform they
+  always use, a standing budget ceiling, how they prefer to collect - call
+  remember once with that fact. Only record what they actually said, never an
+  inference, and never mention that you saved it unless they ask.
 - Once the shopper chooses a product, call buy_and_pay with the exact tool
   result fields. The application will return ConfirmationRequired. Ask the
   shopper to confirm the named product and exact price, then stop. Do not call
@@ -176,6 +191,10 @@ async def _run_tool(
             arguments["telegram_user_id"] = conversation_key[0]
             arguments["telegram_chat_id"] = conversation_key[1]
 
+        if name == "remember":
+            # Same rule as buy_and_pay: identity comes from Telegram.
+            arguments["telegram_user_id"] = conversation_key[0]
+
         result = await asyncio.to_thread(function, **arguments)
 
         if name == "buy_and_pay" and isinstance(result, dict):
@@ -209,9 +228,22 @@ async def _handle_message_locked(
     conversation_key = (telegram_user_id, telegram_chat_id)
     model = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
 
+    # Only the first turn of a chain needs the memory block: later turns inherit
+    # it through previous_response_id, so re-sending would pay for it twice.
+    instructions = SYSTEM_PROMPT
+    if conversation_key not in _previous_response_ids:
+        try:
+            instructions += await asyncio.to_thread(
+                memory_db.build_context, telegram_user_id
+            )
+        except Exception:
+            # Memory is an enhancement. A shopper with an unreachable memory
+            # store should still be able to shop.
+            logger.exception("Could not load shopper memory; continuing without it.")
+
     request: dict[str, Any] = {
         "model": model,
-        "instructions": SYSTEM_PROMPT,
+        "instructions": instructions,
         "input": text,
         "tools": ALL_TOOLS,
         "tool_choice": "auto",
@@ -257,7 +289,9 @@ async def _handle_message_locked(
 
         response = await client.responses.create(
             model=model,
-            instructions=SYSTEM_PROMPT,
+            # Same instructions as the opening call, so a tool round on the
+            # first turn does not drop the shopper's memory block mid-turn.
+            instructions=instructions,
             input=tool_outputs,
             tools=ALL_TOOLS,
             tool_choice="auto",

@@ -36,9 +36,11 @@ Telegram  <->  bot.py  <->  agent/core.py (OpenAI tool-calling loop)
   `ConfirmationRequired`; only an explicit confirmation in the shopper's next
   message authorizes that identical payload. Any change requires confirmation
   again.
-- Memory (shopper preference persistence) is deliberately out of scope for
-  now — ignore the MEMORY box in the architecture diagram until told
-  otherwise.
+- **Memory** (the diagram's MEMORY box) persists in Supabase across restarts.
+  Two sources, deliberately kept apart by how much they can be trusted:
+  purchase history is read live from `orders` (ground truth, never copied
+  anywhere), while stated facts are written only when the model calls
+  `remember`. Details below.
 
 ## What's real vs. stubbed, as of this scaffold
 
@@ -52,7 +54,8 @@ Telegram  <->  bot.py  <->  agent/core.py (OpenAI tool-calling loop)
 | `tools/check_order_status.py`, `tools/cancel_order.py` | Implemented (thin wrappers over `orders_db`). Cancel's "notify merchant dashboard" half is a TODO — no merchant API exists yet. |
 | `tools/buy_and_pay.py` | **Implemented** — creates a `pending` order and hands off to the Mini App. Does not settle; `bot.py` does. |
 | `mini_app/` | Ported from `apps/consumer-bot/`, plus an `order_id` param so a payload identifies which order it settles. |
-| `agent/core.py` | Implemented Responses API loop; dispatches all four tools. |
+| `db/memory_db.py`, `tools/remember.py`, `schema/memory.sql` | **Implemented** — durable shopper facts + purchase history, injected into the prompt. |
+| `agent/core.py` | Implemented Responses API loop; dispatches all five tools. |
 | `bot.py` | Full loop: agent reply, Mini App launch button, and payment settlement. |
 
 **Catalogue data:** 209 products across two real SG merchants (Dynacore, Mansa
@@ -86,6 +89,34 @@ exist, belong to that Telegram user, and still be `pending`. Verified against
 wrong-user, failed-biometric, malformed-payload and replay cases — a replay of
 a valid payload is rejected as already paid rather than charging twice. Keep
 those checks if you touch that handler.
+
+## Shopper memory
+
+`db/memory_db.build_context()` renders what is known about a shopper into the
+model's instructions. Two sources with different trust properties:
+
+- **Purchases** — queried live from `orders` (status `paid`). Never written
+  into `user_memories`: the orders table is already ground truth, and copying
+  it would create a second version that can drift or be hallucinated.
+- **Stated facts** — written only by the `remember` tool, only for what the
+  shopper actually said. `telegram_user_id` is injected by `_run_tool`, never
+  taken from the model.
+
+Constraints worth preserving if you touch this:
+
+- The block is sent **only on the first turn** of a conversation; later turns
+  inherit it via `previous_response_id`. The tool-round call must pass the same
+  `instructions`, or a tool call on turn one silently drops the memory block.
+- Facts are framed as **context, not instruction** — the model is told never to
+  assume a fact still holds if the shopper contradicts it.
+- Caps (`MAX_FACTS`, `MAX_PURCHASES`, 300 chars/fact) keep memory from crowding
+  out the conversation or growing unboundedly with an account's age.
+- A memory-store failure is **non-fatal**: the shopper can still shop, just
+  without history.
+- Deduplication happens in Python, not via `upsert(on_conflict=...)`: the
+  unique index is on the expression `lower(trim(fact))` and PostgREST can only
+  name literal columns as a conflict target. The index still backstops a race,
+  and a 23505 from that race is treated as success.
 
 ## Working here concurrently
 

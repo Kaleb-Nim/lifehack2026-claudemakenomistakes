@@ -111,9 +111,47 @@ CANCEL_ORDER_TOOL = {
     "strict": True,
 }
 
+REMEMBER_TOOL = {
+    "type": "function",
+    "name": "remember",
+    "description": (
+        "Save one durable fact the shopper stated about themselves, so future "
+        "conversations do not ask again. Only for things that stay true beyond "
+        "this conversation, such as a platform they always use, a standing "
+        "budget ceiling, or how they prefer to collect. Do NOT use it for what "
+        "they are shopping for right now, and do NOT record purchases - those "
+        "are tracked automatically. Only save what they actually said; never "
+        "save a guess or an inference."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "fact": {
+                "type": "string",
+                "description": (
+                    "The fact in one short sentence, written about the shopper "
+                    "in the third person, e.g. 'Only uses Windows laptops'."
+                ),
+            },
+            "category": {
+                "type": "string",
+                "enum": ["preference", "constraint", "context"],
+                "description": (
+                    "preference: a lasting like or dislike. constraint: a hard "
+                    "limit they will not cross. context: a stable circumstance."
+                ),
+            },
+        },
+        "required": ["fact", "category"],
+        "additionalProperties": False,
+    },
+    "strict": True,
+}
+
 ALL_TOOLS = [
     PRODUCT_DISCOVERY_TOOL,
     BUY_AND_PAY_TOOL,
     CHECK_ORDER_STATUS_TOOL,
     CANCEL_ORDER_TOOL,
+    REMEMBER_TOOL,
 ]
