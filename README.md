@@ -9,7 +9,7 @@ This is a Bun-workspaces monorepo. **The root holds context only** — no app co
 | Path | What |
 |---|---|
 | `apps/merchant/` | Merchant onboarding web page (Next.js 16). One conversational screen, states A–G, fully hardcoded for the demo video. |
-| `apps/consumer-bot/` | Consumer Telegram bot (Bun + grammY). Hardcoded shopper flow with in-chat simulated Visa checkout. |
+| `apps/consumer-bot/` | Consumer Telegram bot (Python, python-telegram-bot). Deterministic shopper flow with in-chat simulated Visa checkout; see its README for venv setup. |
 | `docs/` | Problem statement, mentor notes, team decisions, design brief, demo shooting script. |
 | `.planning/` | GSD project files (PROJECT / REQUIREMENTS / ROADMAP / STATE). |
 | `AGENTS.md` | Working rules for AI agents in this repo (read first). |
@@ -19,7 +19,7 @@ This is a Bun-workspaces monorepo. **The root holds context only** — no app co
 ```bash
 bun install
 bun run dev:merchant   # http://localhost:3000 — merchant onboarding page
-bun run dev:bot        # needs apps/consumer-bot/.env with TELEGRAM_BOT_TOKEN
+cd apps/consumer-bot && python bot.py   # Python venv + TELEGRAM_BOT_TOKEN — see apps/consumer-bot/README.md
 ```
 
 Merchant page controls for recording: `→` / `Space` next state, `←` back, `?state=C` deep link, `?auto=1` runs the demo-script timing sheet. Pills, the drop bar and **Go live** are the only clicks.

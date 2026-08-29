@@ -1,38 +1,29 @@
-# Consumer bot — read this first (for the consumer-flow pair and their agents)
+# Consumer bot — read this first (consumer-flow pair and your agents)
 
-This repo is a **monorepo**. You own **this directory only**: `apps/consumer-bot/`.
+This repo is a **monorepo**. The Telegram bot lives here, in `apps/consumer-bot/`, and this directory is yours.
 
 ```
-/                    context only — docs/, AGENTS.md, .planning/. Do NOT put app code here.
-apps/merchant/       merchant onboarding web page (Kaleb's half). Don't edit unless coordinated.
-apps/consumer-bot/   ← you are here. Telegram bot for shoppers.
+/                    context only — docs/, AGENTS.md, .planning/. Do NOT put app code at the root.
+apps/merchant/       merchant onboarding web page, Next.js (Kaleb's half). Don't edit unless coordinated.
+apps/consumer-bot/   ← you are here. Python 3.10+ / python-telegram-bot. Moved from root `consumer_bot/` on 2026-08-29.
 ```
+
+Everything that was in `consumer_bot/` is here unchanged (`bot.py`, `content.py`, `flow.py`, `tests/`). Run and verify exactly as `README.md` says, from this directory. There is no Bun/Node here; the root `package.json` workspaces only cover `apps/merchant`.
 
 ## What this app is
 
-The **consumer half** of the demo: a Telegram bot where a shopper describes what they need, the agent asks 1–2 clarifying questions, searches *across all onboarded merchants*, recommends, and completes a **simulated Visa checkout inside the chat** with an explicit transaction preview + confirm step (that's the Trust & Safety rubric).
+The **consumer half** of the demo: a shopper describes what they need, the agent asks 1–2 clarifying questions, searches *across all onboarded merchants*, recommends, and completes a **simulated Visa checkout inside the chat** with a transaction preview → explicit confirm → receipt. Free text must never authorise payment (already true in `flow.py` — keep it that way; it is the Trust & Safety rubric).
 
-Read before building anything:
-- `../../docs/problem-statement.md` — the four expected-submission pillars and judging rubrics
-- `../../docs/visa-mentor-meeting-2026-08-29.md` — what the Visa judge said the statement means (category agent across many merchants, not one shop's chatbot)
-- `../../docs/post-mentor-team-decision-2026-08-29.md` — **hardcode everything first**, video → DevPost → real build last
-- `../../docs/merchant-onboarding-demo-script.md` §6.5 (catalog.json shape) and §6.6 (the exact shopper question the merchant half sets up)
-
-## The moment that must land
-
-Shopper: *"Starting uni next month. Need a light laptop with a good screen, under fourteen hundred, mostly notes and some photo editing."*
-
-Agent searches all onboarded electronics shops → shows **Acer Swift Go 14 — Bizgram Asia — $1,299 cash/PayNow or $1,349 card, 2-yr Acer carry-in, collect today at #05-50 Sim Lim** next to one laptop from another shop → mentions RAM is soldered but the SSD can be upgraded in-shop. That is where the merchant onboarding video pays off. Keep the product facts identical to the merchant page's (`apps/merchant/lib/merchant-data.ts` is the current source; a shared `data/catalog.json` is planned in Phase 3).
+Read before changing the script:
+- `../../docs/problem-statement.md` — four expected-submission pillars, five rubrics
+- `../../docs/post-mentor-team-decision-2026-08-29.md` — hardcode everything first; video → DevPost → real build last
+- `../../docs/demo-video-running-order.md` — **the seam**: what the merchant segment hands you (standing rules at checkout, parallel-import disclosure before pay, merchant notification as the ending) and what you must not repeat
+- `../../AGENTS.md` "Current direction" — the two merchant scripts are **not yet reconciled** (Bizgram Asia vs Hock Seng Electronics), and `content.py` currently sells a "NovaBook Pro 14 from Nova Electronics" that matches neither. Whichever merchant wins, `content.py` must be renamed to match.
 
 ## Rules
 
-- Everything is **hardcoded** until the video is on DevPost. Fake the thinking (~5 s "Searching 3 shops…"), fake the Visa authorisation. No LLM calls, no real payment APIs, no connectors.
-- Checkout must show a **preview → explicit confirm → receipt**; never pay on a single tap. Say what the agent will and won't do.
-- Use `bun`, not npm/node. `bun run dev` here, or `bun run dev:bot` from the root.
-- Token goes in `apps/consumer-bot/.env` as `TELEGRAM_BOT_TOKEN` (copy `.env.example`). Never commit `.env`.
-- Commit small and often; don't touch `apps/merchant/` or root files without asking in the group.
-- Planning/status for the whole project lives in `../../.planning/` (GSD). Phase 2 = this bot; see `ROADMAP.md` for the success criteria.
-
-## Current state
-
-`src/index.ts` already contains a working scripted flow (start → clarify → results → RAM follow-up → preview → confirm → receipt). Extend it; don't rewrite it from scratch.
+- **Hardcoded** until the video is on DevPost: fake the thinking (~5 s "Searching…"), fake the Visa authorisation. No LLM calls, no real payment APIs, no connectors.
+- Token in `apps/consumer-bot/.env` as `TELEGRAM_BOT_TOKEN` (copy `.env.example`). Never commit `.env`.
+- Keep the pure state-transition tests green (`python -m unittest discover -s tests -v`) — they are the only tests in the repo and they guard the consent step.
+- Commit small and often. Don't touch `apps/merchant/` or root files without a word in the group.
+- Project status/roadmap: `../../.planning/` (GSD). Phase 2 = this bot; success criteria in `ROADMAP.md`.

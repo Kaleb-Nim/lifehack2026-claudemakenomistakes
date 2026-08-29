@@ -4,7 +4,6 @@
   "workspaces": ["apps/*"],
   "scripts": {
     "dev:merchant": "bun run --cwd apps/merchant dev",
-    "build:merchant": "bun run --cwd apps/merchant build",
-    "dev:bot": "bun run --cwd apps/consumer-bot dev"
+    "build:merchant": "bun run --cwd apps/merchant build"
   }
 }
