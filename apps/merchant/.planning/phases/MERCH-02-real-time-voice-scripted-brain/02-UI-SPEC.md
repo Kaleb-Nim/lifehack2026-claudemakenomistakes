@@ -54,7 +54,9 @@ they are not this phase's to fix.
 Styling is Tailwind v4 imported via `@import "tailwindcss"` with no `tailwind.config.*` — all
 custom values live as CSS custom properties in `app/globals.css`. This phase adds **zero** new
 custom properties and **zero** modified rules to that file, with one narrow exception noted under
-Orb States below.
+Orb States below. **Amended by QUICK-agent-thinking-time.md (2026-08-30):** that exception is now
+two — `.orb.connecting` (02-02) and the new `.orb.thinking`/`.think-panel`/`.think-bar`/
+`.think-trace-line` rules (see State 3.5 below), all additive, no existing rule modified.
 
 ---
 
@@ -76,8 +78,14 @@ events and inserts one new state ahead of it:
 | 1 | Orb tapped / owner starts talking → mic permission + ephemeral-key mint + WebRTC handshake in flight, session not yet ready | `connecting` (**new**) | `"Connecting…"` (new microcopy — operational, not brief copy) | Yes |
 | 2 | Session ready; agent audio actively playing (`response.audio.delta`…`response.audio.done` / `output_audio_buffer.started`…`.stopped`) | `speaking` (existing) | current beat's existing `orbLabel`/`"Speaking"` (unchanged) | Yes |
 | 3 | Session ready; owner speech active (`input_audio_buffer.speech_started` → `speech_stopped` + 400 ms settle, CONTEXT.md) | `listening` (existing) | `"Listening to you"` (existing string, reused) | Yes |
+| 3.5 | **Amended by QUICK-agent-thinking-time.md (2026-08-30).** Session ready; a reply has been requested but is still in its think pause (`lib/beat-runner.ts`'s `sendResponseCreate`, before `response.create` is actually sent) — `BEAT_THINK_MS` (700 ms) on an ordinary turn, `WORK_THINK_MS` (4500 ms) only on beat C, the post-upload "reading the sources" beat. Always superseded by state 3 the instant the owner starts a fresh turn (a `speech_started` cancels the pending pause outright). | `thinking` (**new**) — its own slow halo/core pulse (`--beat: 2.4s`), deliberately *not* given the `live` class's full ring-spin/morph (that reads as already talking, not pausing) | `"Thinking…"` (new microcopy). On the Work tier only, also renders a `.think-panel` below the label: a progress bar (`.think-bar`, reusing the existing `qprog` keyframe) and 2-3 staggered trace lines from `lib/agent-script.ts`'s exported `WORK_THINK_TRACE` (`.think-trace-line`, existing `rise` keyframe). The Beat tier renders no extra DOM at all. | Yes |
 | 4 | Session ready; nobody currently talking (gap between the agent's line finishing and the beat advancing, or before the owner starts a turn) | `idle` (existing visual, reused) | `"Your turn — go ahead"` (new microcopy) | Yes |
 | 5 | Session dropped mid-beat, silently fallen back to scripted mode (see §5) | falls back to Phase 1 behaviour: `frame.orb` / `frame.orbLabel` exactly as today | scripted `frame.orbLabel` (existing, unchanged) | Yes |
+
+**State 3.5's think pause is never a second `response.create` site.** It only delays when
+`sendResponseCreate`'s own body sends its one bare `response.create` — the send site, the
+`activeResponseRef` in-flight guard, and the bare `response: {}` shape (02-02) are all unchanged.
+`AUDIO_TIMEOUT_MS` starts at that actual send, after the pause, never before.
 
 **Why state 4 is not just `frame.orb`:** `frame.orb` is a per-beat *scripted-timing* hint (mostly
 `"speaking"` for beats C–G) that assumed a fixed-duration typewriter/timer was always running. In

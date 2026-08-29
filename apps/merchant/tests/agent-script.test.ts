@@ -2,7 +2,7 @@
 // the build rather than the shoot. Sibling to tests/frame-timing.test.ts.
 
 import { describe, expect, test } from "bun:test";
-import { BEATS, TOOLS } from "../lib/agent-script";
+import { BEAT_THINK_MS, BEATS, TOOLS, WORK_THINK_MS, WORK_THINK_TRACE } from "../lib/agent-script";
 import { FRAMES } from "../lib/merchant-data";
 
 describe("agent-script", () => {
@@ -52,5 +52,27 @@ describe("agent-script", () => {
     for (const beat of BEATS) {
       expect("line" in beat).toBe(false);
     }
+  });
+
+  // QUICK-agent-thinking-time.md: the reply pause is motivated (only beat C gets the longer
+  // Work-tier pause), not uniform, and both durations stay inside the doc's stated ranges.
+  test("only beat C carries thinkTier 'work'; every other beat is the default Beat tier", () => {
+    for (const beat of BEATS) {
+      if (beat.key === "C") expect(beat.thinkTier).toBe("work");
+      else expect(beat.thinkTier).toBeUndefined();
+    }
+  });
+
+  test("BEAT_THINK_MS / WORK_THINK_MS stay inside QUICK-agent-thinking-time.md's ranges", () => {
+    expect(BEAT_THINK_MS).toBeGreaterThanOrEqual(600);
+    expect(BEAT_THINK_MS).toBeLessThanOrEqual(900);
+    expect(WORK_THINK_MS).toBeGreaterThanOrEqual(4000);
+    expect(WORK_THINK_MS).toBeLessThanOrEqual(5000);
+  });
+
+  test("WORK_THINK_TRACE has 2-3 non-empty lines", () => {
+    expect(WORK_THINK_TRACE.length).toBeGreaterThanOrEqual(2);
+    expect(WORK_THINK_TRACE.length).toBeLessThanOrEqual(3);
+    for (const line of WORK_THINK_TRACE) expect(line.length).toBeGreaterThan(0);
   });
 });
