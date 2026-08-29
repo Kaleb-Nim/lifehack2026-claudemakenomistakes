@@ -77,6 +77,19 @@ _previous_response_ids: dict[tuple[int, int], str] = {}
 _conversation_locks: dict[tuple[int, int], asyncio.Lock] = {}
 _pending_purchases: dict[tuple[int, int], dict[str, Any]] = {}
 
+# Orders that have been created but not yet paid for. bot.py drains this after
+# each turn to attach the Mini App launch button, which the agent loop cannot
+# send itself - it returns text, and a Telegram Web App can only be opened from
+# a keyboard button.
+_pending_payments: dict[tuple[int, int], dict[str, Any]] = {}
+
+
+def take_pending_payment(
+    telegram_user_id: int, telegram_chat_id: int
+) -> dict[str, Any] | None:
+    """Pop the payment awaiting a Mini App launch for this conversation."""
+    return _pending_payments.pop((telegram_user_id, telegram_chat_id), None)
+
 
 def _get_client() -> AsyncOpenAI:
     global _client
@@ -159,8 +172,14 @@ async def _run_tool(
             # Consume the authorization before the side effect so a repeated
             # model call cannot create a duplicate purchase.
             purchase_authorization[0] = None
+            # Identity comes from Telegram, never from the model.
+            arguments["telegram_user_id"] = conversation_key[0]
+            arguments["telegram_chat_id"] = conversation_key[1]
 
         result = await asyncio.to_thread(function, **arguments)
+
+        if name == "buy_and_pay" and isinstance(result, dict):
+            _pending_payments[conversation_key] = result
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         return _json_result(
             {"ok": False, "error": str(exc), "error_type": type(exc).__name__}

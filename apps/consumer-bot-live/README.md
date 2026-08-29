@@ -85,5 +85,21 @@ Messages now run through the OpenAI Responses API and can call all four tools.
 Replies use low verbosity and a concise commerce dialogue policy. Purchases
 have a Python-enforced two-turn confirmation gate: the shopper must confirm the
 exact product and amount in their next message before `buy_and_pay` can run.
-`product_discovery` and `buy_and_pay` are still scaffolded, so the agent will
-report those paths as temporarily unavailable until their implementations land.
+
+## Checkout Mini App
+
+`buy_and_pay` creates a `pending` order and the bot attaches a button that
+launches `mini_app/` for the simulated VIC sequence (biometric passkey →
+payment preview → confirmation). On success the Mini App posts the `order_id`
+back and `bot.py` marks the order `paid`.
+
+This needs a public HTTPS URL in `MINI_APP_URL`. Serve and tunnel it:
+
+```sh
+python mini_app/serve.py --port 8080
+python mini_app/tunnel_watchdog.py
+```
+
+Without `MINI_APP_URL` the bot still creates orders, but says checkout is
+unavailable instead of launching it. See `AGENTS.md` for the settlement
+security checks.
