@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections.abc import MutableMapping
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import BadRequest
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+    WebAppInfo,
+)
 from telegram.ext import (
     ApplicationBuilder,
     CallbackContext,
@@ -23,6 +32,7 @@ import flow
 
 LOGGER = logging.getLogger(__name__)
 SESSION_KEY = "consumer_sessions"
+SENSITIVE_ACTIONS = {flow.CONFIRM_WITH_PASSKEY, flow.CONFIRM_CANCELLATION}
 
 
 def get_session(
@@ -53,28 +63,121 @@ def replace_session(
     return session
 
 
-def telegram_markup(view: flow.View) -> InlineKeyboardMarkup | None:
-    if not view.button_rows:
-        return None
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(button.label, callback_data=button.action)
-                for button in row
-            ]
+def telegram_markup(
+    view: flow.View,
+) -> InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove:
+    mini_app_url = os.environ.get("MINI_APP_URL", "").strip()
+    payment_button = next(
+        (
+            button
             for row in view.button_rows
-        ]
+            for button in row
+            if button.action == flow.CONFIRM_WITH_PASSKEY
+        ),
+        None,
     )
+    if payment_button is not None and mini_app_url:
+        parts = urlsplit(mini_app_url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        query["confirmation_label"] = payment_button.label
+        transaction_url = urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
+        )
+        return ReplyKeyboardMarkup(
+            [
+                [
+                    KeyboardButton(
+                        payment_button.label,
+                        web_app=WebAppInfo(url=transaction_url),
+                    )
+                ]
+            ],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+            input_field_placeholder="Biometric confirmation required",
+        )
+
+    sensitive_rows = [
+        [
+            InlineKeyboardButton(button.label, callback_data=button.action)
+            for button in row
+            if button.action in SENSITIVE_ACTIONS
+        ]
+        for row in view.button_rows
+    ]
+    sensitive_rows = [row for row in sensitive_rows if row]
+    if sensitive_rows:
+        return InlineKeyboardMarkup(sensitive_rows)
+    return ReplyKeyboardRemove()
+
+
+async def on_web_app_data(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if update.effective_user is None or update.effective_message is None:
+        return
+    web_app_data = update.effective_message.web_app_data
+    if web_app_data is None:
+        return
+
+    session = get_session(context.chat_data, update.effective_user.id)
+    try:
+        payload = json.loads(web_app_data.data)
+    except (json.JSONDecodeError, TypeError):
+        payload = {}
+
+    if (
+        session.step is flow.Step.VISA_CONFIRMATION
+        and payload.get("type") == "biometric_confirmation"
+        and payload.get("status") == "authorized"
+    ):
+        result = flow.handle_action(session, flow.CONFIRM_WITH_PASSKEY)
+    else:
+        result = flow.TransitionResult(
+            False,
+            flow.current_view(
+                session,
+                "Biometric confirmation was not completed. No payment was made.",
+            ),
+        )
+
+    await update.effective_message.reply_text(
+        result.view.text,
+        reply_markup=telegram_markup(result.view),
+    )
+
+
+def text_choice_action(view: flow.View, text: str) -> str | None:
+    choice = " ".join(text.casefold().split())
+    if not choice:
+        return None
+
+    exact_matches: list[str] = []
+    partial_matches: list[str] = []
+    for row in view.button_rows:
+        for button in row:
+            if button.action in SENSITIVE_ACTIONS:
+                continue
+            label = button.label.removeprefix("✓ ").casefold()
+            normalized_label = " ".join(label.split())
+            short_label = normalized_label.split("·", maxsplit=1)[0].strip()
+            if choice in {normalized_label, short_label}:
+                exact_matches.append(button.action)
+            elif len(choice) >= 3 and choice in normalized_label:
+                partial_matches.append(button.action)
+
+    matches = exact_matches or partial_matches
+    return matches[0] if len(set(matches)) == 1 else None
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user is None or update.effective_message is None:
         return
-    session = replace_session(context.chat_data, update.effective_user.id)
-    view = flow.current_view(session)
+    replace_session(context.chat_data, update.effective_user.id)
     await update.effective_message.reply_text(
-        view.text,
-        reply_markup=telegram_markup(view),
+        content.WELCOME_TEXT,
+        reply_markup=ReplyKeyboardRemove(),
     )
 
 
@@ -87,6 +190,11 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     session = get_session(context.chat_data, update.effective_user.id)
     result = flow.handle_text(session, update.effective_message.text)
+    if not result.accepted:
+        view = flow.current_view(session)
+        action = text_choice_action(view, update.effective_message.text)
+        if action is not None:
+            result = flow.handle_action(session, action)
     await update.effective_message.reply_text(
         result.view.text,
         reply_markup=telegram_markup(result.view),
@@ -117,16 +225,13 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     result = flow.handle_action(session, action)
     await query.answer(text=result.callback_notice)
 
-    markup = telegram_markup(result.view)
-    try:
-        await query.edit_message_text(result.view.text, reply_markup=markup)
-    except BadRequest as exc:
-        if "message is not modified" in str(exc).lower():
-            return
-        if query.message is None:
-            raise
-        LOGGER.info("Could not edit callback message; sending a new response")
-        await query.message.reply_text(result.view.text, reply_markup=markup)
+    if query.message is None:
+        LOGGER.info("Callback has no source message; response was not sent")
+        return
+    await query.message.reply_text(
+        result.view.text,
+        reply_markup=telegram_markup(result.view),
+    )
 
 
 async def on_error(update: object, context: CallbackContext) -> None:
@@ -137,6 +242,9 @@ async def on_error(update: object, context: CallbackContext) -> None:
 def build_application(token: str):
     application = ApplicationBuilder().token(token).build()
     application.add_handler(CommandHandler(["start", "restart"], start))
+    application.add_handler(
+        MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_web_app_data)
+    )
     application.add_handler(CallbackQueryHandler(on_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     application.add_handler(MessageHandler(filters.COMMAND, on_unknown_command))

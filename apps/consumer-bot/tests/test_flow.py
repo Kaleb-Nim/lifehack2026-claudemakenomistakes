@@ -5,6 +5,8 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
+from telegram import InlineKeyboardMarkup, ReplyKeyboardRemove
+
 import bot
 import content
 import flow
@@ -15,26 +17,19 @@ def advance_to_use_cases(session: flow.Session) -> None:
 
 
 def select_coursework_and_programming(session: flow.Session) -> None:
-    advance_to_use_cases(session)
-    flow.handle_action(session, flow.TOGGLE_COURSEWORK)
-    flow.handle_action(session, flow.TOGGLE_PROGRAMMING)
+    flow.handle_text(
+        session,
+        "I need a laptop for programming and coursework assignments.",
+    )
 
 
-def advance_to_bundle(session: flow.Session) -> None:
+def advance_to_visa(session: flow.Session) -> None:
     select_coursework_and_programming(session)
-    flow.handle_action(session, flow.CONTINUE_USE_CASES)
-    flow.handle_action(session, flow.CHOOSE_NOVABOOK)
+    flow.handle_text(session, "buy NovaBook Pro")
 
 
-def advance_to_visa(session: flow.Session, *, include_hub: bool) -> None:
-    advance_to_bundle(session)
-    choice = flow.ADD_HUB if include_hub else flow.LAPTOP_ONLY
-    flow.handle_action(session, choice)
-    flow.handle_action(session, flow.CONTINUE_TO_VISA)
-
-
-def advance_to_order(session: flow.Session, *, include_hub: bool = True) -> None:
-    advance_to_visa(session, include_hub=include_hub)
+def advance_to_order(session: flow.Session) -> None:
+    advance_to_visa(session)
     flow.handle_action(session, flow.CONFIRM_WITH_PASSKEY)
 
 
@@ -57,7 +52,7 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertTrue(result.accepted)
         self.assertEqual(session.step, flow.Step.DISCOVERY)
-        self.assertIn("supports laptops", result.view.text)
+        self.assertIn("What matters most", result.view.text)
         self.assertEqual(result.view.button_rows[0][0].label, "Back to laptops")
 
     def test_canonical_budget_text_advances(self) -> None:
@@ -68,41 +63,61 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(result.accepted)
         self.assertEqual(session.step, flow.Step.USE_CASES)
 
-
-class UseCaseTests(unittest.TestCase):
-    def test_multiple_use_cases_toggle_visually(self) -> None:
+    def test_natural_laptop_request_advances(self) -> None:
         session = flow.Session()
-        advance_to_use_cases(session)
 
-        flow.handle_action(session, flow.TOGGLE_COURSEWORK)
-        result = flow.handle_action(session, flow.TOGGLE_PROGRAMMING)
+        result = flow.handle_text(session, "Can you find me a cheap laptop?")
 
+        self.assertTrue(result.accepted)
+        self.assertEqual(session.step, flow.Step.USE_CASES)
+
+    def test_scoped_laptop_request_skips_clarifying_question(self) -> None:
+        session = flow.Session()
+
+        result = flow.handle_text(
+            session,
+            "I need a laptop for university coursework, coding and Docker.",
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(session.step, flow.Step.RECOMMENDATION)
         self.assertEqual(
             session.selected_use_cases,
             {"coursework", "programming"},
         )
-        labels = [button.label for row in result.view.button_rows for button in row]
-        self.assertIn("✓ Coursework", labels)
-        self.assertIn("✓ Programming", labels)
+        self.assertIn("ROUGH SPEC RANGE", result.view.text)
 
-    def test_selecting_again_deselects(self) -> None:
+    def test_typed_scope_answer_advances_without_continue(self) -> None:
+        session = flow.Session(step=flow.Step.USE_CASES)
+
+        result = flow.handle_text(session, "Programming and video editing")
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(session.step, flow.Step.RECOMMENDATION)
+        self.assertEqual(
+            session.selected_use_cases,
+            {"programming", "video_editing"},
+        )
+
+
+class UseCaseTests(unittest.TestCase):
+    def test_school_request_asks_what_kind_of_schoolwork(self) -> None:
         session = flow.Session()
         advance_to_use_cases(session)
-        flow.handle_action(session, flow.TOGGLE_COURSEWORK)
 
-        flow.handle_action(session, flow.TOGGLE_COURSEWORK)
+        result = flow.handle_text(session, "It is for school")
 
-        self.assertEqual(session.selected_use_cases, set())
+        self.assertEqual(session.step, flow.Step.SCHOOLWORK)
+        self.assertIn("What kind of schoolwork", result.view.text)
 
-    def test_continue_requires_a_selection(self) -> None:
-        session = flow.Session()
-        advance_to_use_cases(session)
+    def test_computer_science_schoolwork_produces_specs(self) -> None:
+        session = flow.Session(step=flow.Step.SCHOOLWORK)
 
-        result = flow.handle_action(session, flow.CONTINUE_USE_CASES)
+        result = flow.handle_text(session, "Coding and computer science")
 
-        self.assertFalse(result.accepted)
-        self.assertEqual(session.step, flow.Step.USE_CASES)
-        self.assertIn("at least one", result.view.text)
+        self.assertEqual(session.step, flow.Step.RECOMMENDATION)
+        self.assertEqual(session.selected_use_cases, {"coursework", "programming"})
+        self.assertIn("16 GB RAM", result.view.text)
 
 
 class RecommendationAndCartTests(unittest.TestCase):
@@ -110,67 +125,48 @@ class RecommendationAndCartTests(unittest.TestCase):
         session = flow.Session()
         select_coursework_and_programming(session)
 
-        result = flow.handle_action(session, flow.CONTINUE_USE_CASES)
+        result = flow.TransitionResult(True, flow.current_view(session))
 
         self.assertEqual(session.step, flow.Step.RECOMMENDATION)
         self.assertIn("NovaBook Pro 14 — S$899", result.view.text)
         self.assertIn("16 GB RAM · 512 GB SSD", result.view.text)
-        self.assertIn("VS Code, Docker, and light Premiere Pro", result.view.text)
+        self.assertIn("CodeMate Air 14", result.view.text)
 
     def test_comparison_does_not_change_product_state(self) -> None:
         session = flow.Session()
         select_coursework_and_programming(session)
-        flow.handle_action(session, flow.CONTINUE_USE_CASES)
 
         result = flow.handle_action(session, flow.COMPARE_OPTIONS)
 
         self.assertEqual(session.step, flow.Step.RECOMMENDATION)
-        self.assertIn("Three hardcoded demo options", result.view.text)
+        self.assertIn("Here’s how the three options compare", result.view.text)
 
-    def test_customise_returns_to_bundle_choices(self) -> None:
+    def test_buying_product_goes_directly_to_authentication(self) -> None:
         session = flow.Session()
-        advance_to_bundle(session)
+        select_coursework_and_programming(session)
 
-        result = flow.handle_action(session, flow.CUSTOMISE)
-
-        self.assertEqual(session.step, flow.Step.BUNDLE)
-        self.assertIn("Customisation is hardcoded", result.view.text)
-        self.assertTrue(result.view.button_rows)
-
-    def test_hub_checkout_total_is_929(self) -> None:
-        session = flow.Session()
-        advance_to_bundle(session)
-
-        result = flow.handle_action(session, flow.ADD_HUB)
-
-        self.assertTrue(session.include_hub)
-        self.assertEqual(session.step, flow.Step.CHECKOUT)
-        self.assertIn("TOTAL: S$929", result.view.text)
-        self.assertIn("NO PAYMENT HAS BEEN MADE.", result.view.text)
-
-    def test_laptop_only_checkout_total_is_899(self) -> None:
-        session = flow.Session()
-        advance_to_bundle(session)
-
-        result = flow.handle_action(session, flow.LAPTOP_ONLY)
+        result = flow.handle_text(session, "buy NovaBook Pro")
 
         self.assertFalse(session.include_hub)
-        self.assertIn("TOTAL: S$899", result.view.text)
+        self.assertEqual(session.step, flow.Step.VISA_CONFIRMATION)
+        self.assertIn("Item: NovaBook Pro 14", result.view.text)
+        self.assertIn("Pay S$899", result.view.text)
+        self.assertNotIn("hub", result.view.text.casefold())
 
-    def test_edit_cart_returns_to_bundle(self) -> None:
+    def test_cancel_authentication_returns_to_products(self) -> None:
         session = flow.Session()
-        advance_to_bundle(session)
-        flow.handle_action(session, flow.ADD_HUB)
+        advance_to_visa(session)
 
-        flow.handle_action(session, flow.EDIT_CART)
+        result = flow.handle_action(session, flow.CANCEL_CHECKOUT)
 
-        self.assertEqual(session.step, flow.Step.BUNDLE)
+        self.assertEqual(session.step, flow.Step.RECOMMENDATION)
+        self.assertIn("No payment was made", result.view.text)
 
 
 class PaymentSafeguardTests(unittest.TestCase):
     def test_free_text_cannot_authorize_payment(self) -> None:
         session = flow.Session()
-        advance_to_visa(session, include_hub=True)
+        advance_to_visa(session)
 
         result = flow.handle_text(session, "Yes, pay now")
 
@@ -178,40 +174,40 @@ class PaymentSafeguardTests(unittest.TestCase):
         self.assertEqual(session.step, flow.Step.VISA_CONFIRMATION)
         self.assertEqual(session.payment_status, flow.PaymentStatus.UNPAID)
         self.assertEqual(session.order_status, flow.OrderStatus.NONE)
-        self.assertIn("Free text cannot authorize", result.view.text)
+        self.assertIn("No payment is made unless", result.view.text)
 
     def test_cancel_checkout_never_approves_payment(self) -> None:
         session = flow.Session()
-        advance_to_visa(session, include_hub=True)
+        advance_to_visa(session)
 
         result = flow.handle_action(session, flow.CANCEL_CHECKOUT)
 
-        self.assertEqual(session.step, flow.Step.CHECKOUT)
+        self.assertEqual(session.step, flow.Step.RECOMMENDATION)
         self.assertEqual(session.payment_status, flow.PaymentStatus.UNPAID)
         self.assertEqual(session.order_status, flow.OrderStatus.NONE)
         self.assertIn("No payment was made", result.view.text)
 
     def test_only_explicit_passkey_action_approves_payment(self) -> None:
         session = flow.Session()
-        advance_to_visa(session, include_hub=True)
+        advance_to_visa(session)
 
         result = flow.handle_action(session, flow.CONFIRM_WITH_PASSKEY)
 
         self.assertEqual(session.step, flow.Step.ORDER_CONFIRMED)
         self.assertEqual(session.payment_status, flow.PaymentStatus.APPROVED)
         self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
-        self.assertIn("Amount: S$929", result.view.text)
+        self.assertIn("Amount: S$899", result.view.text)
 
     def test_stale_action_cannot_change_payment_state(self) -> None:
         session = flow.Session()
-        advance_to_bundle(session)
+        select_coursework_and_programming(session)
 
         result = flow.handle_action(session, flow.CONFIRM_WITH_PASSKEY)
 
         self.assertFalse(result.accepted)
-        self.assertEqual(session.step, flow.Step.BUNDLE)
+        self.assertEqual(session.step, flow.Step.RECOMMENDATION)
         self.assertEqual(session.payment_status, flow.PaymentStatus.UNPAID)
-        self.assertIn("no longer active", result.view.text)
+        self.assertIn("confirmation has expired", result.view.text)
 
 
 class OrderAndCancellationTests(unittest.TestCase):
@@ -223,7 +219,7 @@ class OrderAndCancellationTests(unittest.TestCase):
         receipt = flow.handle_action(session, flow.VIEW_RECEIPT)
 
         self.assertIn("NE-2048 is currently Preparing", tracking.view.text)
-        self.assertIn("Amount paid: S$929", receipt.view.text)
+        self.assertIn("Amount paid: S$899", receipt.view.text)
         self.assertIn("Visa ···· 4242", receipt.view.text)
         self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
 
@@ -263,7 +259,7 @@ class OrderAndCancellationTests(unittest.TestCase):
 
     def test_explicit_cancellation_changes_state_and_refund(self) -> None:
         session = flow.Session()
-        advance_to_order(session, include_hub=False)
+        advance_to_order(session)
         flow.handle_action(session, flow.CANCEL_ORDER)
 
         result = flow.handle_action(session, flow.CONFIRM_CANCELLATION)
@@ -304,6 +300,22 @@ class ResetAndIsolationTests(unittest.TestCase):
 
 
 class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
+    def test_only_consequential_actions_are_rendered_as_buttons(self) -> None:
+        discovery_markup = bot.telegram_markup(flow.current_view(flow.Session()))
+        self.assertIsInstance(discovery_markup, ReplyKeyboardRemove)
+
+        payment_session = flow.Session(step=flow.Step.VISA_CONFIRMATION)
+        payment_markup = bot.telegram_markup(flow.current_view(payment_session))
+        self.assertIsInstance(payment_markup, InlineKeyboardMarkup)
+        self.assertEqual(
+            [
+                button.callback_data
+                for row in payment_markup.inline_keyboard
+                for button in row
+            ],
+            [flow.CONFIRM_WITH_PASSKEY],
+        )
+
     def test_session_store_is_independent_by_chat_and_user(self) -> None:
         first_chat: dict[object, object] = {}
         second_chat: dict[object, object] = {}
@@ -322,36 +334,32 @@ class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
         first = bot.get_session(chat_data, 101)
         second = bot.get_session(chat_data, 202)
         first.step = flow.Step.ORDER_CONFIRMED
-        second.step = flow.Step.BUNDLE
+        second.step = flow.Step.CHECKOUT
 
         replacement = bot.replace_session(chat_data, 101)
 
         self.assertEqual(replacement.step, flow.Step.DISCOVERY)
-        self.assertEqual(bot.get_session(chat_data, 202).step, flow.Step.BUNDLE)
+        self.assertEqual(bot.get_session(chat_data, 202).step, flow.Step.CHECKOUT)
 
-    async def test_callback_is_acknowledged_before_message_edit(self) -> None:
+    async def test_typed_choice_is_accepted_and_gets_a_new_prompt(self) -> None:
         events: list[tuple[str, object]] = []
 
-        class Query:
-            data = flow.CATEGORY_LAPTOP
-            message = None
+        class Message:
+            text = "laptop"
 
-            async def answer(self, text: str | None = None) -> None:
-                events.append(("answer", text))
-
-            async def edit_message_text(self, text: str, reply_markup: object) -> None:
-                events.append(("edit", text))
+            async def reply_text(self, text: str, reply_markup: object) -> None:
+                events.append(("reply", text))
 
         update = SimpleNamespace(
-            callback_query=Query(),
             effective_user=SimpleNamespace(id=101),
+            effective_message=Message(),
         )
         context = SimpleNamespace(chat_data={})
 
-        await bot.on_callback(update, context)
+        await bot.on_text(update, context)
 
-        self.assertEqual([event[0] for event in events], ["answer", "edit"])
-        self.assertIn(content.BUDGET_REQUEST, events[1][1])
+        self.assertEqual([event[0] for event in events], ["reply"])
+        self.assertIn("What will you mainly use it for", events[0][1])
         self.assertEqual(
             bot.get_session(context.chat_data, 101).step,
             flow.Step.USE_CASES,
@@ -360,19 +368,20 @@ class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_stale_callback_is_acknowledged_and_cannot_approve(self) -> None:
         events: list[tuple[str, object]] = []
 
+        class Message:
+            async def reply_text(self, text: str, reply_markup: object) -> None:
+                events.append(("reply", text))
+
         class Query:
             data = flow.CONFIRM_WITH_PASSKEY
-            message = None
+            message = Message()
 
             async def answer(self, text: str | None = None) -> None:
                 events.append(("answer", text))
 
-            async def edit_message_text(self, text: str, reply_markup: object) -> None:
-                events.append(("edit", text))
-
         context = SimpleNamespace(chat_data={})
         session = bot.get_session(context.chat_data, 101)
-        session.step = flow.Step.BUNDLE
+        session.step = flow.Step.CHECKOUT
         update = SimpleNamespace(
             callback_query=Query(),
             effective_user=SimpleNamespace(id=101),
@@ -380,8 +389,8 @@ class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         await bot.on_callback(update, context)
 
-        self.assertIn("no longer active", events[0][1])
-        self.assertIn("no longer active", events[1][1])
+        self.assertIn("confirmation has expired", events[0][1])
+        self.assertIn("confirmation has expired", events[1][1])
         self.assertEqual(session.payment_status, flow.PaymentStatus.UNPAID)
         self.assertEqual(session.order_status, flow.OrderStatus.NONE)
 

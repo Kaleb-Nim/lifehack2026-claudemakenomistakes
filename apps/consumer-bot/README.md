@@ -30,6 +30,31 @@ python bot.py
 
 Use `/start` or `/restart` in Telegram to reset the current chat/user session.
 
+## Biometric confirmation Mini App
+
+The Visa confirmation step can open `mini_app/index.html` as a Telegram Mini
+App and invoke Telegram's native biometric manager. This is a simulated payment
+approval backed by local Face ID/Touch ID authentication, not a Visa payment
+passkey or real card transaction.
+
+Serve the Mini App locally:
+
+```sh
+python mini_app/serve.py --port 8080
+```
+
+Expose that port through an HTTPS tunnel or deployment, then set the public URL
+in `.env`:
+
+```sh
+MINI_APP_URL=https://your-public-https-domain.example/
+```
+
+Restart the bot after changing the URL. If `MINI_APP_URL` is absent, the demo
+falls back to the existing inline callback confirmation. On a successful native
+biometric result, the Mini App sends a `web_app_data` service message to the bot;
+the bot accepts it only while that user is at the Visa confirmation step.
+
 ## Verify
 
 Run formatting, linting, and the pure state-transition tests from
