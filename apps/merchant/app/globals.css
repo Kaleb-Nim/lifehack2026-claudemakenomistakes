@@ -144,6 +144,12 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .orb.idle { transform: scale(0.9); }
 .orb.listening { transform: scale(0.97); --beat: 0.85s; }
 .orb.speaking { --beat: 1.5s; }
+/* thinking = the agent's motivated reply pause (QUICK-agent-thinking-time.md) — a slow,
+   deliberate halo/core pulse only, deliberately NOT the full `.orb.live` ring-spin/morph
+   treatment (that reads as "talking", this should read as "pausing"). */
+.orb.thinking { transform: scale(0.93); --beat: 2.4s; }
+.orb.thinking .orb-halo { animation-name: qhalo; }
+.orb.thinking .orb-core-wrap { animation-name: qbeat; }
 
 .centre-text { width: 100%; max-width: 680px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
 .orb-label { font-size: 14px; color: var(--color-neutral-700); }
@@ -161,6 +167,16 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .caption-history-2 { opacity: 0.42; }
 .caption-history-3 { opacity: 0.26; }
 .caret { display: inline-block; width: 2px; height: 18px; margin-left: 5px; background: var(--color-accent); vertical-align: -3px; animation: qcaret 1s steps(1) infinite; }
+/* Work-tier think panel (QUICK-agent-thinking-time.md) — beat C's post-upload pause only.
+   `.think-bar` reuses the existing `qprog` keyframe (Context cards' `reading…` bar) with its
+   duration set inline from WORK_THINK_MS so the two stay in lockstep without a second timing
+   constant living in CSS. Trace lines stagger in via the existing `rise` keyframe, animation-
+   delay set inline the same way. */
+.think-panel { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; max-width: 420px; animation: fade 0.3s ease-out both; }
+.think-bar { width: 100%; height: 4px; border-radius: 999px; background: var(--color-neutral-200); overflow: hidden; }
+.think-bar > div { height: 4px; border-radius: 999px; background: var(--color-accent); animation-name: qprog; animation-timing-function: linear; animation-fill-mode: forwards; }
+.think-trace { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.think-trace-line { font-size: 14px; color: var(--color-neutral-700); animation: rise 0.4s ease-out both; }
 .pills { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; animation: rise 0.4s ease-out both; }
 .pill { padding: 15px 26px; border-radius: 999px; font-size: 19px; font-weight: 500; white-space: nowrap; border: 1px solid var(--color-neutral-300); color: var(--color-text); transition: background 0.15s, transform 0.1s; }
 .pill:hover { background: var(--color-neutral-200); }

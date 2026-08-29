@@ -13,6 +13,7 @@ import {
   type LogLine,
 } from "../lib/merchant-data";
 import { CARD_STAGGER_MS } from "../lib/frame-timing";
+import { WORK_THINK_MS, WORK_THINK_TRACE } from "../lib/agent-script";
 import { useOnboardingState } from "../hooks/useOnboardingState";
 import { useBeatRunner } from "../lib/beat-runner";
 
@@ -72,6 +73,10 @@ export default function Onboarding() {
   const voiceConnecting = voice.phase === "connecting";
   const voiceSpeaking = voice.phase === "live" && voice.speaking;
   const voiceHearing = voice.phase === "live" && voice.hearing;
+  // The agent's think pause (QUICK-agent-thinking-time.md) — `voiceHearing` above always
+  // takes priority, since a fresh owner turn cancels the pending think (lib/beat-runner.ts)
+  // the instant it starts, so the two are never visually in conflict.
+  const voiceThinking = voice.phase === "live" && voice.thinking !== null;
   const voiceActive = voiceConnecting || voice.phase === "live";
 
   const caption = useTypewriter(frame.caption);
@@ -92,11 +97,13 @@ export default function Onboarding() {
   const orbState = voiceConnecting ? "connecting"
     : voiceSpeaking ? "speaking"
     : voiceHearing ? "listening"
+    : voiceThinking ? "thinking"
     : voice.phase === "live" ? "idle"
     : live ? "speaking" : typing ? "listening" : frame.orb;
   const orbLabel = voiceConnecting ? "Connecting…"
     : voiceSpeaking ? "Speaking"
     : voiceHearing ? "Listening to you"
+    : voiceThinking ? "Thinking…"
     : voice.phase === "live" ? "Your turn — go ahead"
     : live ? "Speaking" : typing ? "Listening to you" : frame.orbLabel;
   const agentLine = live ? LIVE_LINE : frame.agentLine;
@@ -151,7 +158,11 @@ export default function Onboarding() {
 
           {/* Centre — voice orb */}
           <div className="centre">
-            <div className={`orb ${orbState}${orbState !== "idle" ? " live" : ""}`} onClick={scriptedMode ? undefined : voice.connect}>
+            {/* "thinking" deliberately does not get the `live` class — it is a slow, calm
+                pulse (see `.orb.thinking` in globals.css), not the full ring-spin/morph
+                treatment `live` drives for speaking/listening, which would read as the agent
+                already talking rather than pausing (QUICK-agent-thinking-time.md). */}
+            <div className={`orb ${orbState}${orbState !== "idle" && orbState !== "thinking" ? " live" : ""}`} onClick={scriptedMode ? undefined : voice.connect}>
               <div className="orb-halo" />
               <div className="orb-core-wrap"><div className="orb-core" /></div>
               <div className="orb-ring ring-a"><div /></div>
@@ -162,6 +173,26 @@ export default function Onboarding() {
             <div className="centre-text">
               <div className="orb-label">{orbLabel}</div>
               <div className="agent-line" key={agentLine}>{agentLine}</div>
+              {/* Work-tier think (QUICK-agent-thinking-time.md) — only on beat C's post-upload
+                  pause: a progress bar plus a handful of stepped trace lines, so the agent
+                  visibly "reads" the sources instead of pausing on nothing. Beat-tier pauses
+                  render no extra UI at all — only the orb's own `thinking` state above. */}
+              {voice.thinking === "work" && (
+                <div className="think-panel">
+                  <div className="think-bar"><div style={{ animationDuration: `${WORK_THINK_MS}ms` }} /></div>
+                  <div className="think-trace">
+                    {WORK_THINK_TRACE.map((line, i) => (
+                      <div
+                        key={line}
+                        className="think-trace-line"
+                        style={{ animationDelay: `${(i * WORK_THINK_MS) / (WORK_THINK_TRACE.length + 1)}ms` }}
+                      >
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {voice.phase === "live" ? (
                 // Real-session mode: stack up to 3 finalized turns above the in-progress one,
                 // newest at the bottom, oldest visually recessive — the point of the task is
