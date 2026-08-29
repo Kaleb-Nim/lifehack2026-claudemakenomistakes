@@ -1,3 +1,7 @@
+# Lifehack 2026 Problem statement category: Digital payments
+
+NUS SOC 24h hackathon: https://lifehack2026.nuscomputing.com/
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
