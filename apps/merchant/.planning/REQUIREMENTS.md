@@ -24,18 +24,18 @@ Scope: `apps/merchant` only. The consumer bot is out of scope.
 
 - [ ] **VOICE-01**: `OPENAI_API_KEY` (+ optional `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_VOICE`) read server-side only; `app/api/realtime/session` route handler returns an ephemeral client secret; `.env.example` documents the keys
 - [ ] **VOICE-02**: Browser opens a WebRTC session to the Realtime API: mic → agent, agent audio → speakers; orb switches idle / listening / speaking from real session events (`input_audio_buffer.speech_started/stopped`, `response.audio.*`)
-- [ ] **VOICE-03**: Owner's speech is transcribed live (input audio transcription) into the caption bubble. **Amended 2026-08-29 (context-bias decision):** the agent line on screen stays `frame.agentLine` — the deterministic Phase 1 copy — and the model's own output transcript is logged for the operator, never rendered on stage.
-- [ ] **VOICE-04**: Session config: server VAD, transcription on, tools registered, session `instructions` = the contents of `lib/agent-context.md`, read from disk at mint time (tone from the brief: neutral, warm, brief). **Amended 2026-08-29:** the persona is a markdown file a non-engineer can edit between takes, not a `SYSTEM_PROMPT` constant.
+- [x] **VOICE-03**: Owner's speech is transcribed live (input audio transcription) into the caption bubble. **Amended 2026-08-29 (context-bias decision):** the agent line on screen stays `frame.agentLine` — the deterministic Phase 1 copy — and the model's own output transcript is logged for the operator, never rendered on stage.
+- [x] **VOICE-04**: Session config: server VAD, transcription on, tools registered, session `instructions` = the contents of `lib/agent-context.md`, read from disk at mint time (tone from the brief: neutral, warm, brief). **Amended 2026-08-29:** the persona is a markdown file a non-engineer can edit between takes, not a `SYSTEM_PROMPT` constant.
 - [ ] **VOICE-05**: `?mode=scripted` or a missing key falls back to the Phase 1 keyboard demo with no errors
 - [ ] **VOICE-06**: Operator controls: mute, "skip to next beat", "repeat line", and a small on-screen beat indicator that is hidden in `?record=1`
 
 ### Scripted brain — Phase 2
 
-- [ ] **SCRIPT-01**: `lib/agent-script.ts` holds the shooting script as beats: expected owner turn (wait for VAD stop / pill tap / upload event), tool calls to emit, log lines to lock, rows to flip. **Amended 2026-08-29:** a beat no longer carries an agent line — beats drive the screen, `lib/agent-context.md` drives the words.
+- [x] **SCRIPT-01**: `lib/agent-script.ts` holds the shooting script as beats: expected owner turn (wait for VAD stop / pill tap / upload event), tool calls to emit, log lines to lock, rows to flip. **Amended 2026-08-29:** a beat no longer carries an agent line — beats drive the screen, `lib/agent-context.md` drives the words.
 - [ ] ~~**SCRIPT-02**: Each agent line is spoken **exactly** as written (`response.create` with instructions to say the given text verbatim; no improvisation)~~ — **superseded 2026-08-29** by the context-bias decision (`.planning/QUICK-context-biased-agent.md`). Verbatim lines cost a full TTS round-trip before any audio (~9.6 s for the greeting) and could not react to what the owner said.
-- [ ] **SCRIPT-02a** (replaces SCRIPT-02): The agent converses freely but cannot leave the shop's facts. A bare `response.create` (no per-turn `instructions`) is issued on every qualified owner turn; the session `instructions` from `lib/agent-context.md` are the only thing shaping the reply. No price, product or policy outside that file is ever spoken.
+- [x] **SCRIPT-02a** (replaces SCRIPT-02): The agent converses freely but cannot leave the shop's facts. A bare `response.create` (no per-turn `instructions`) is issued on every qualified owner turn; the session `instructions` from `lib/agent-context.md` are the only thing shaping the reply. No price, product or policy outside that file is ever spoken.
 - [ ] **SCRIPT-03**: Tools are real Realtime function tools (`read_source`, `search_web`, `lock_fact`, `flag_conflict`, `resolve_flag`, `ask_pill`, `go_live`) whose handlers return **hardcoded** results from `lib/merchant-data.ts`; the on-screen log/rows/pills are driven only by tool calls so Phase 5 can swap handlers without touching the UI
-- [ ] **SCRIPT-04**: Owner's real words never change the path: whatever they say, the beat advances on speech-stop (with a minimum-duration guard) so the recording can't derail
+- [x] **SCRIPT-04**: Owner's real words never change the path: whatever they say, the beat advances on speech-stop (with a minimum-duration guard) so the recording can't derail
 
 ### Real uploads, canned reading — Phase 3
 

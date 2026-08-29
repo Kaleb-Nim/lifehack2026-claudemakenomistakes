@@ -200,6 +200,12 @@ What a human still needs to confirm with a real headset, per the plan's own `<ve
 
 Plan 02-03 (operator chrome: teleprompter, status chip, `M` mute key, real tool-handler payloads) can build on this directly — `notify()`, `beatNumber`/`beatTotal`, and the ring-buffered `events` are already exposed for it to consume.
 
+## Self-Check: PASSED
+
+All 7 files listed under Files Created/Modified exist on disk (`[ -f ]` verified), plus this
+SUMMARY.md itself. All 5 commits (`c6acec4`, `317a64b`, `1cd59e0`, `f6cf41c`, `2f4fac4`) are
+present in `git log --oneline --all`.
+
 ---
 *Phase: MERCH-02-real-time-voice-scripted-brain*
 *Completed: 2026-08-29*

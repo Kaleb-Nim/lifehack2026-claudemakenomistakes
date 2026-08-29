@@ -43,10 +43,10 @@ The demo video is recorded on a page where the **voice is real and the brain is 
   4. `?mode=scripted` (no key) still plays the Phase 1 keyboard demo unchanged
   5. When `read_source` fires, that source's Context card scrolls itself into view inside the existing scroll container (carried forward from Phase 1 verification `52f5d4e`: state C has ~891 px of content in a ~791 px box and nobody scrolls during a take)
 
-**Plans**: 3 plans
+**Plans**: 2/3 plans executed
 
-- [ ] 02-01-PLAN.md — Tracer: one live scripted beat end to end. State lifted into `hooks/useOnboardingState.ts` (three animation regressions pinned by a bun test), `app/api/realtime/session` mints the ephemeral key, WebRTC connects on the orb tap, the agent speaks beat A verbatim and one canned `lock_fact` moves the page a frame. Human rehearsal confirms the `create_response: false` / `interrupt_response: false` silence contract on the deployed model.
-- [ ] 02-02-PLAN.md — **Re-planned 2026-08-29 around the context bias** (the verbatim original is kept at `archive/02-02-PLAN-verbatim.md`, `status: superseded`). The live conversation loop: `lib/agent-context.md` served as the session `instructions` (fail-closed if unreadable), a bare `response.create` on every qualified owner turn — which is also the fix for the agent going silent after its opening — an active-response guard, split reply (400 ms) and advance (1.2 s) thresholds, all eight beats A–G driving the screen only, the `→`/`←`/`R` operator keys, and the caption bubble fed by real input transcription.
+- [x] 02-01-PLAN.md — Tracer: one live scripted beat end to end. State lifted into `hooks/useOnboardingState.ts` (three animation regressions pinned by a bun test), `app/api/realtime/session` mints the ephemeral key, WebRTC connects on the orb tap, the agent speaks beat A verbatim and one canned `lock_fact` moves the page a frame. Human rehearsal confirms the `create_response: false` / `interrupt_response: false` silence contract on the deployed model.
+- [x] 02-02-PLAN.md — **Re-planned 2026-08-29 around the context bias** (the verbatim original is kept at `archive/02-02-PLAN-verbatim.md`, `status: superseded`). The live conversation loop: `lib/agent-context.md` served as the session `instructions` (fail-closed if unreadable), a bare `response.create` on every qualified owner turn — which is also the fix for the agent going silent after its opening — an active-response guard, split reply (400 ms) and advance (1.2 s) thresholds, all eight beats A–G driving the screen only, the `→`/`←`/`R` operator keys, and the caption bubble fed by real input transcription.
 - [ ] 02-03-PLAN.md — Canned tools, operator chrome and silent fallback. Seven tool handlers returning hardcoded results from `lib/merchant-data.ts`, the UI reacting only to handler returns, the read-source scroll-into-view fix, the teleprompter and status chip (absent from the DOM under `?record=1`), the `M`/`Esc` keys, and every failure path falling silently back to the Phase 1 demo.
 
 ### Phase 3: Real uploads, canned reading
@@ -107,7 +107,7 @@ Phases execute in order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Hardcoded demo page | 2/2 | Complete | 2026-08-29 |
-| 2. Real-time voice, scripted brain | 0/3 | Not started | - |
+| 2. Real-time voice, scripted brain | 2/3 | In Progress|  |
 | 3. Real uploads, canned reading | 0/2 | Not started | - |
 | 4. Record the demo | 0/2 | Not started | - |
 | 5. Real brain | 0/2 | Not started | - |
