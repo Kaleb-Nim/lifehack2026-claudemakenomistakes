@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -19,7 +20,7 @@ from telegram import (
     Update,
     WebAppInfo,
 )
-from telegram.constants import ParseMode
+from telegram.constants import ChatAction, ParseMode
 from telegram.ext import (
     ApplicationBuilder,
     CallbackContext,
@@ -36,7 +37,17 @@ import flow
 LOGGER = logging.getLogger(__name__)
 SESSION_KEY = "consumer_sessions"
 SENSITIVE_ACTIONS = {flow.CONFIRM_WITH_PASSKEY, flow.CONFIRM_CANCELLATION}
+BUTTON_ACTIONS = SENSITIVE_ACTIONS | {
+    flow.VIEW_TRANSACTIONS,
+    flow.CANCEL_ORDER,
+    flow.KEEP_ORDER,
+}
+CALLBACK_BUTTON_ACTIONS = BUTTON_ACTIONS - {flow.CONFIRM_CANCELLATION}
+BIOMETRIC_ACTIONS = {flow.CONFIRM_WITH_PASSKEY, flow.CONFIRM_CANCELLATION}
 ENV_PATH = Path(__file__).with_name(".env")
+MIN_TYPING_DELAY_SECONDS = 0.8
+MAX_TYPING_DELAY_SECONDS = 2.4
+TYPING_CHARACTERS_PER_SECOND = 120
 
 
 def current_mini_app_url() -> str:
@@ -45,7 +56,7 @@ def current_mini_app_url() -> str:
         for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
             key, separator, value = line.partition("=")
             if separator and key.strip() == "MINI_APP_URL":
-                return value.strip().strip('"\'')
+                return value.strip().strip("\"'")
     except OSError:
         pass
     return os.environ.get("MINI_APP_URL", "").strip()
@@ -83,19 +94,20 @@ def telegram_markup(
     view: flow.View,
 ) -> InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove:
     mini_app_url = current_mini_app_url()
-    payment_button = next(
+    biometric_button = next(
         (
             button
             for row in view.button_rows
             for button in row
-            if button.action == flow.CONFIRM_WITH_PASSKEY
+            if button.action in BIOMETRIC_ACTIONS
         ),
         None,
     )
-    if payment_button is not None and mini_app_url:
+    if biometric_button is not None and mini_app_url:
         parts = urlsplit(mini_app_url)
         query = dict(parse_qsl(parts.query, keep_blank_values=True))
-        query["confirmation_label"] = payment_button.label
+        query["confirmation_label"] = biometric_button.label
+        query["action"] = biometric_button.action
         if view.product_name:
             query["product_name"] = view.product_name
         transaction_url = urlunsplit(
@@ -105,7 +117,7 @@ def telegram_markup(
             [
                 [
                     KeyboardButton(
-                        payment_button.label,
+                        biometric_button.label,
                         web_app=WebAppInfo(url=transaction_url),
                     )
                 ]
@@ -115,17 +127,17 @@ def telegram_markup(
             input_field_placeholder="Biometric confirmation required",
         )
 
-    sensitive_rows = [
+    action_rows = [
         [
             InlineKeyboardButton(button.label, callback_data=button.action)
             for button in row
-            if button.action in SENSITIVE_ACTIONS
+            if button.action in CALLBACK_BUTTON_ACTIONS
         ]
         for row in view.button_rows
     ]
-    sensitive_rows = [row for row in sensitive_rows if row]
-    if sensitive_rows:
-        return InlineKeyboardMarkup(sensitive_rows)
+    action_rows = [row for row in action_rows if row]
+    if action_rows:
+        return InlineKeyboardMarkup(action_rows)
     return ReplyKeyboardRemove()
 
 
@@ -134,6 +146,19 @@ async def send_view(
     context: ContextTypes.DEFAULT_TYPE,
     view: flow.View,
 ) -> None:
+    bot = getattr(context, "bot", None)
+    chat_id = getattr(message, "chat_id", None)
+    if bot is not None and chat_id is not None:
+        await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        typing_delay = min(
+            MAX_TYPING_DELAY_SECONDS,
+            max(
+                MIN_TYPING_DELAY_SECONDS,
+                len(view.text) / TYPING_CHARACTERS_PER_SECOND,
+            ),
+        )
+        await asyncio.sleep(typing_delay)
+
     markup = telegram_markup(view)
     rich_message: dict[str, str] | None = None
     if view.rich_html:
@@ -181,20 +206,33 @@ async def on_web_app_data(
     except (json.JSONDecodeError, TypeError):
         payload = {}
 
-    if (
-        session.step is flow.Step.VISA_CONFIRMATION
-        and payload.get("type") == "biometric_confirmation"
+    biometric_authorized = (
+        payload.get("type") == "biometric_confirmation"
         and payload.get("status") == "authorized"
         and payload.get("method") == "telegram_biometric"
+    )
+    if (
+        biometric_authorized
+        and session.step is flow.Step.VISA_CONFIRMATION
+        and payload.get("action") == flow.CONFIRM_WITH_PASSKEY
     ):
         result = flow.handle_action(session, flow.CONFIRM_WITH_PASSKEY)
+    elif (
+        biometric_authorized
+        and session.step is flow.Step.CANCELLATION_PREVIEW
+        and payload.get("action") == flow.CONFIRM_CANCELLATION
+    ):
+        result = flow.handle_action(session, flow.CONFIRM_CANCELLATION)
     else:
+        failure_notice = (
+            "Biometric confirmation was not completed. The transaction was not "
+            "cancelled."
+            if session.step is flow.Step.CANCELLATION_PREVIEW
+            else "Biometric confirmation was not completed. No payment was made."
+        )
         result = flow.TransitionResult(
             False,
-            flow.current_view(
-                session,
-                "Biometric confirmation was not completed. No payment was made.",
-            ),
+            flow.current_view(session, failure_notice),
         )
 
     await send_view(update.effective_message, context, result.view)

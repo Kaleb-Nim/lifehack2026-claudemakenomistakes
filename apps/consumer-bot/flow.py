@@ -17,6 +17,7 @@ class Step(str, Enum):
     CHECKOUT = "checkout"
     VISA_CONFIRMATION = "visa_confirmation"
     ORDER_CONFIRMED = "order_confirmed"
+    TRANSACTIONS = "transactions"
     CANCELLATION_PREVIEW = "cancellation_preview"
     ORDER_CANCELLED = "order_cancelled"
 
@@ -29,7 +30,7 @@ class PaymentStatus(str, Enum):
 
 class OrderStatus(str, Enum):
     NONE = "none"
-    PREPARING = "preparing"
+    CONFIRMED = "confirmed"
     CANCELLED = "cancelled"
 
 
@@ -84,9 +85,9 @@ EDIT_CART = "checkout:edit"
 CONTINUE_TO_VISA = "checkout:visa"
 CONFIRM_WITH_PASSKEY = "visa:confirm"
 CANCEL_CHECKOUT = "visa:cancel"
-TRACK_ORDER = "order:track"
 CANCEL_ORDER = "order:cancel"
 VIEW_RECEIPT = "order:receipt"
+VIEW_TRANSACTIONS = "transaction:list"
 KEEP_ORDER = "cancel:keep"
 CONFIRM_CANCELLATION = "cancel:confirm"
 
@@ -195,16 +196,33 @@ def current_view(session: Session, prefix: str | None = None) -> View:
             content.order_text(selected_laptop(session), session.include_hub, prefix),
             _order_buttons(),
         )
+    if session.step is Step.TRANSACTIONS:
+        text = content.transactions_text(
+            selected_laptop(session),
+            session.include_hub,
+            session.payment_status is PaymentStatus.REFUND_INITIATED,
+        )
+        if prefix:
+            text = f"{prefix}\n\n{text}"
+        return View(
+            text,
+            _transaction_buttons(session),
+        )
     if session.step is Step.CANCELLATION_PREVIEW:
         laptop = selected_laptop(session)
         text = content.cancellation_preview_text(laptop, session.include_hub)
         if prefix:
             text = f"{prefix}\n\n{text}"
-        return View(text, _cancellation_buttons(laptop, session.include_hub))
+        return View(
+            text,
+            _cancellation_buttons(laptop, session.include_hub),
+            product_name=laptop.name,
+        )
     return View(
         content.cancellation_complete_text(
             selected_laptop(session), session.include_hub
-        )
+        ),
+        ((Button(content.BUTTON_VIEW_TRANSACTIONS, VIEW_TRANSACTIONS),),),
     )
 
 
@@ -267,9 +285,7 @@ def handle_text(session: Session, text: str) -> TransitionResult:
                     _recommendation_buttons(),
                     rich_html=(
                         "<h2>Which laptop would you like to buy?</h2>\n"
-                        + content.recommendation_rich_html(
-                            session.selected_use_cases
-                        )
+                        + content.recommendation_rich_html(session.selected_use_cases)
                     ),
                 ),
             )
@@ -289,17 +305,23 @@ def handle_text(session: Session, text: str) -> TransitionResult:
         if any(word in normalized for word in ("cancel", "back")):
             return _handle_visa(session, CANCEL_CHECKOUT)
     elif session.step is Step.ORDER_CONFIRMED:
-        if "track" in normalized:
-            return _handle_order(session, TRACK_ORDER)
+        if "transaction" in normalized:
+            return _handle_order(session, VIEW_TRANSACTIONS)
         if "receipt" in normalized:
             return _handle_order(session, VIEW_RECEIPT)
         if "cancel" in normalized:
             return _handle_order(session, CANCEL_ORDER)
+    elif session.step is Step.TRANSACTIONS:
+        if "cancel" in normalized:
+            return _handle_transactions(session, CANCEL_ORDER)
     elif session.step is Step.CANCELLATION_PREVIEW:
         if any(
             phrase in normalized for phrase in ("keep", "don't cancel", "do not cancel")
         ):
             return _handle_cancellation(session, KEEP_ORDER)
+    elif session.step is Step.ORDER_CANCELLED:
+        if "transaction" in normalized:
+            return _handle_cancelled_order(session, VIEW_TRANSACTIONS)
 
     return TransitionResult(False, current_view(session))
 
@@ -333,8 +355,12 @@ def handle_action(session: Session, action: str) -> TransitionResult:
         return _handle_visa(session, action)
     if session.step is Step.ORDER_CONFIRMED:
         return _handle_order(session, action)
+    if session.step is Step.TRANSACTIONS:
+        return _handle_transactions(session, action)
     if session.step is Step.CANCELLATION_PREVIEW:
         return _handle_cancellation(session, action)
+    if session.step is Step.ORDER_CANCELLED:
+        return _handle_cancelled_order(session, action)
     return _stale_result(session)
 
 
@@ -432,7 +458,7 @@ def _handle_checkout(session: Session, action: str) -> TransitionResult:
 def _handle_visa(session: Session, action: str) -> TransitionResult:
     if action == CONFIRM_WITH_PASSKEY:
         session.payment_status = PaymentStatus.APPROVED
-        session.order_status = OrderStatus.PREPARING
+        session.order_status = OrderStatus.CONFIRMED
         session.step = Step.ORDER_CONFIRMED
         return TransitionResult(True, current_view(session))
     if action == CANCEL_CHECKOUT:
@@ -445,18 +471,9 @@ def _handle_visa(session: Session, action: str) -> TransitionResult:
 
 
 def _handle_order(session: Session, action: str) -> TransitionResult:
-    if action == TRACK_ORDER:
-        return TransitionResult(
-            True,
-            View(
-                content.order_text(
-                    selected_laptop(session),
-                    session.include_hub,
-                    content.tracking_text(),
-                ),
-                _order_buttons(),
-            ),
-        )
+    if action == VIEW_TRANSACTIONS:
+        session.step = Step.TRANSACTIONS
+        return TransitionResult(True, current_view(session))
     if action == VIEW_RECEIPT:
         return TransitionResult(
             True,
@@ -471,9 +488,16 @@ def _handle_order(session: Session, action: str) -> TransitionResult:
     return _stale_result(session)
 
 
+def _handle_transactions(session: Session, action: str) -> TransitionResult:
+    if action == CANCEL_ORDER and session.order_status is OrderStatus.CONFIRMED:
+        session.step = Step.CANCELLATION_PREVIEW
+        return TransitionResult(True, current_view(session))
+    return _stale_result(session)
+
+
 def _handle_cancellation(session: Session, action: str) -> TransitionResult:
     if action == KEEP_ORDER:
-        session.step = Step.ORDER_CONFIRMED
+        session.step = Step.TRANSACTIONS
         return TransitionResult(
             True,
             current_view(session, content.CANCELLATION_DISMISSED_NOTICE),
@@ -482,6 +506,13 @@ def _handle_cancellation(session: Session, action: str) -> TransitionResult:
         session.payment_status = PaymentStatus.REFUND_INITIATED
         session.order_status = OrderStatus.CANCELLED
         session.step = Step.ORDER_CANCELLED
+        return TransitionResult(True, current_view(session))
+    return _stale_result(session)
+
+
+def _handle_cancelled_order(session: Session, action: str) -> TransitionResult:
+    if action == VIEW_TRANSACTIONS:
+        session.step = Step.TRANSACTIONS
         return TransitionResult(True, current_view(session))
     return _stale_result(session)
 
@@ -585,13 +616,13 @@ def _visa_buttons(
 
 
 def _order_buttons() -> tuple[tuple[Button, ...], ...]:
-    return (
-        (
-            Button(content.BUTTON_TRACK_ORDER, TRACK_ORDER),
-            Button(content.BUTTON_CANCEL_ORDER, CANCEL_ORDER),
-        ),
-        (Button(content.BUTTON_VIEW_RECEIPT, VIEW_RECEIPT),),
-    )
+    return ((Button(content.BUTTON_VIEW_TRANSACTIONS, VIEW_TRANSACTIONS),),)
+
+
+def _transaction_buttons(session: Session) -> tuple[tuple[Button, ...], ...]:
+    if session.order_status is OrderStatus.CANCELLED:
+        return ()
+    return ((Button(content.BUTTON_CANCEL_TRANSACTION, CANCEL_ORDER),),)
 
 
 def _cancellation_buttons(

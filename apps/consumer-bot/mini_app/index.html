@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <title>Secure payment confirmation</title>
+    <title>Secure transaction confirmation</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
       :root {
@@ -126,20 +126,20 @@
   <body>
     <main>
       <p class="eyebrow">Secured by Visa</p>
-      <h1>Secure Payment Authorization</h1>
-      <p class="muted">Verify your identity to complete this purchase securely.</p>
+      <h1 id="page-title">Secure Payment Authorization</h1>
+      <p id="page-description" class="muted">Verify your identity to complete this purchase securely.</p>
 
       <section class="summary" aria-label="Transaction summary">
         <div class="row"><span class="muted">Merchant</span><strong>Nova Electronics</strong></div>
         <div class="row"><span class="muted">Item</span><strong id="product">Selected laptop</strong></div>
         <div class="row"><span class="muted">Card</span><strong>Visa ···· 4242</strong></div>
-        <div class="row"><span class="muted">Total</span><span id="confirmation" class="amount">Confirm payment</span></div>
+        <div class="row"><span id="amount-label" class="muted">Total</span><span id="confirmation" class="amount">Confirm payment</span></div>
       </section>
 
       <button id="authenticate" type="button" disabled>Verify identity &amp; continue</button>
       <p id="status" class="muted" role="status">Checking biometric availability…</p>
       <p class="fine-print muted">
-        Identity verification protects against unauthorized purchases. Your biometric data
+        Identity verification protects against unauthorized transactions. Your biometric data
         stays on this device, and card details are not exposed to the chat or AI.
       </p>
     </main>
@@ -172,8 +172,20 @@
       const query = new URLSearchParams(window.location.search);
       const label = query.get("confirmation_label");
       const productName = query.get("product_name");
+      const action = query.get("action") || "visa:confirm";
+      const isCancellation = action === "cancel:confirm";
       const product = document.getElementById("product");
+      const pageTitle = document.getElementById("page-title");
+      const pageDescription = document.getElementById("page-description");
+      const amountLabel = document.getElementById("amount-label");
       let authenticationMode = "unavailable";
+
+      if (isCancellation) {
+        document.title = "Secure cancellation confirmation";
+        pageTitle.textContent = "Confirm Transaction Cancellation";
+        pageDescription.textContent = "Verify your identity to cancel this transaction and initiate the refund.";
+        amountLabel.textContent = "Refund";
+      }
 
       if (label) {
         const amount = label.match(/S\$[\d,]+(?:\.\d{2})?/i)?.[0];
@@ -199,6 +211,7 @@
           type: "biometric_confirmation",
           status: "authorized",
           method,
+          action,
           confirmed_at: new Date().toISOString()
         }));
       }
@@ -220,11 +233,19 @@
       function authenticate(manager) {
         showBiometricPrompt();
         manager.authenticate(
-          { reason: productName ? `Authorize ${productName}` : "Authorize this payment" },
+          {
+            reason: isCancellation
+              ? `Cancel ${productName || "this transaction"}`
+              : (productName ? `Authorize ${productName}` : "Authorize this payment")
+          },
           (authenticated) => {
             if (!authenticated) {
               hideBiometricPrompt();
-              setStatus("Authentication was cancelled or failed. No payment was made.");
+              setStatus(
+                isCancellation
+                  ? "Authentication was cancelled or failed. The transaction was not cancelled."
+                  : "Authentication was cancelled or failed. No payment was made."
+              );
               return;
             }
 
@@ -278,7 +299,7 @@
 
         setStatus("Telegram needs permission to use device biometrics…", true);
         manager.requestAccess(
-          { reason: "Confirm payments without exposing card details" },
+          { reason: "Confirm transactions without exposing card details" },
           (granted) => {
             if (granted) authenticate(manager);
             else showBiometricSettings();
