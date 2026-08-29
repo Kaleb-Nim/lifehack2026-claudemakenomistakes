@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -24,6 +24,8 @@ from tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+ToolEventCallback = Callable[[str, str, str], Awaitable[None]]
 
 TOOL_DISPATCH: dict[str, Callable[..., Any]] = {
     "product_discovery": product_discovery.run,
@@ -280,8 +282,28 @@ async def _run_tool(
     return _json_result({"ok": True, "result": result})
 
 
+async def _emit_tool_event(
+    callback: ToolEventCallback | None,
+    event: str,
+    tool_name: str,
+    payload: str,
+) -> None:
+    """Report display-only tool progress without risking the agent turn."""
+    if callback is None:
+        return
+
+    try:
+        await callback(event, tool_name, payload)
+    except Exception:
+        logger.exception("Could not deliver %s event for tool %s", event, tool_name)
+
+
 async def _handle_message_locked(
-    *, telegram_user_id: int, telegram_chat_id: int, text: str
+    *,
+    telegram_user_id: int,
+    telegram_chat_id: int,
+    text: str,
+    on_tool_event: ToolEventCallback | None,
 ) -> str:
     client = _get_client()
     conversation_key = (telegram_user_id, telegram_chat_id)
@@ -337,10 +359,22 @@ async def _handle_message_locked(
 
         tool_outputs = []
         for call in calls:
+            await _emit_tool_event(
+                on_tool_event,
+                "start",
+                call.name,
+                call.arguments,
+            )
             output = await _run_tool(
                 call.name,
                 call.arguments,
                 conversation_key=conversation_key,
+            )
+            await _emit_tool_event(
+                on_tool_event,
+                "result",
+                call.name,
+                output,
             )
             tool_outputs.append(
                 {
@@ -368,7 +402,11 @@ async def _handle_message_locked(
 
 
 async def handle_message(
-    *, telegram_user_id: int, telegram_chat_id: int, text: str
+    *,
+    telegram_user_id: int,
+    telegram_chat_id: int,
+    text: str,
+    on_tool_event: ToolEventCallback | None = None,
 ) -> str:
     """Run one shopper turn through OpenAI and return the final text reply.
 
@@ -385,4 +423,5 @@ async def handle_message(
             telegram_user_id=telegram_user_id,
             telegram_chat_id=telegram_chat_id,
             text=text.strip(),
+            on_tool_event=on_tool_event,
         )

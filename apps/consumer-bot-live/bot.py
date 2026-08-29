@@ -206,6 +206,13 @@ async def _keep_typing(bot, chat_id: int, stop: asyncio.Event) -> None:
             continue
 
 
+TOOL_EVENT_TEXT_LIMIT = 3_800
+
+# Display preference only: it is deliberately separate from agent conversation
+# state and resets when the bot process restarts.
+_verbose_levels: dict[tuple[int, int], int] = {}
+
+
 def mini_app_url() -> str:
     """Read the tunnel URL at send time, not at import.
 
@@ -263,6 +270,58 @@ def _mini_app_keyboard(
     )
 
 
+def _format_tool_payload(payload: str) -> str:
+    """Pretty-print JSON tool data and keep it within Telegram's message limit."""
+    try:
+        value = json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
+        formatted = payload
+    else:
+        formatted = json.dumps(value, indent=2, ensure_ascii=False, default=str)
+
+    if len(formatted) <= TOOL_EVENT_TEXT_LIMIT:
+        return formatted
+    return formatted[:TOOL_EVENT_TEXT_LIMIT] + "\n… (truncated)"
+
+
+async def on_verbose(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show or set tool-call observability for one Telegram conversation."""
+    message = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+    if message is None or user is None or chat is None:
+        return
+
+    conversation_key = (user.id, chat.id)
+    if not context.args:
+        level = _verbose_levels.get(conversation_key, 0)
+        await message.reply_text(
+            f"Tool observability is at level {level}.\n"
+            "Use /verbose 0, /verbose 1, or /verbose 2."
+        )
+        return
+
+    requested = context.args[0].casefold()
+    if requested == "off":
+        requested = "0"
+    if requested not in {"0", "1", "2"}:
+        await message.reply_text(
+            "Choose /verbose 0 (off), /verbose 1 (calls), or "
+            "/verbose 2 (calls and results)."
+        )
+        return
+
+    level = int(requested)
+    if level == 0:
+        _verbose_levels.pop(conversation_key, None)
+        description = "off"
+    else:
+        _verbose_levels[conversation_key] = level
+        description = "calls" if level == 1 else "calls and results"
+
+    await message.reply_text(f"Tool observability set to level {level}: {description}.")
+
+
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     user = update.effective_user
@@ -272,11 +331,24 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     stop_typing = asyncio.Event()
     typing = asyncio.create_task(_keep_typing(context.bot, chat.id, stop_typing))
+    verbose_level = _verbose_levels.get((user.id, chat.id), 0)
+
+    async def on_tool_event(event: str, tool_name: str, payload: str) -> None:
+        if verbose_level == 0 or (event == "result" and verbose_level < 2):
+            return
+
+        if event == "start":
+            heading = f"Tool call: {tool_name}\nArguments:"
+        else:
+            heading = f"Tool result: {tool_name}"
+        await message.reply_text(f"{heading}\n{_format_tool_payload(payload)}")
+
     try:
         reply = await core.handle_message(
             telegram_user_id=user.id,
             telegram_chat_id=chat.id,
             text=message.text,
+            on_tool_event=on_tool_event,
         )
     except Exception:
         logger.exception("Failed to handle Telegram message")
@@ -499,6 +571,7 @@ def main() -> None:
     )
     # /start behaves as /new so a returning shopper gets a clean thread.
     application.add_handler(CommandHandler(["new", "start", "reset"], on_new))
+    application.add_handler(CommandHandler("verbose", on_verbose))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     logger.info("Starting consumer-bot-live (polling)...")
     application.run_polling()
