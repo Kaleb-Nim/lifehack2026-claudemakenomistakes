@@ -12,6 +12,7 @@ as a tool return value.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -20,21 +21,26 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
     Update,
     WebAppInfo,
 )
+from telegram.error import TelegramError
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     ContextTypes,
     MessageHandler,
     filters,
 )
 
 from agent import core
-from db import orders_db
+from db import catalog_db, orders_db
+from tools import buy_and_pay
 
 load_dotenv()
 
@@ -45,6 +51,78 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 PAY_ACTION = "visa:confirm"
+BUY_CALLBACK_PREFIX = "buy:"
+
+# Telegram truncates captions at 1024 characters, but the point of cards is
+# brevity: a card longer than this is the wall of text we are replacing.
+MAX_CAPTION_CHARS = 350
+
+# Each card is its own message, so the tool's limit of 10 would be its own kind
+# of spam. Five is enough to choose between without endless scrolling.
+MAX_CARDS = 5
+
+
+def _short_title(title: str) -> str:
+    """Trim a catalogue title down to something readable on a card.
+
+    Supplier titles carry the full spec sheet and a repeated SKU, e.g.
+    'ASUS VIVOBOOK 15 X1504MA-BQ118W LAPTOP (CORE 5 320 6C/16GB RAM/512GB/
+    INTEL/15.6"FHD-QUIET BLUE/W11H) - X1504MA-BQ118W'. The parenthetical and
+    the trailing SKU are noise once the price and photo are shown.
+    """
+    trimmed = title.split(" (")[0].split(" - ")[0].strip()
+    if len(trimmed) > 70:
+        trimmed = trimmed[:67].rstrip() + "..."
+    return trimmed or title[:70]
+
+
+def _card_caption(rank: int, product: dict[str, Any]) -> str:
+    lines = [
+        f"<b>{rank}. {html.escape(_short_title(product['title']))}</b>",
+        (
+            f"{html.escape(product['price_display'])} · "
+            f"{html.escape(product['merchant_name'])}"
+        ),
+    ]
+    for note in product.get("considerations") or []:
+        lines.append(f"<i>{html.escape(note)}</i>")
+    if not product.get("available", True):
+        lines.append("<i>Out of stock</i>")
+    caption = "\n".join(lines)
+    return caption[:MAX_CAPTION_CHARS]
+
+
+async def _send_product_cards(message, products: list[dict[str, Any]]) -> None:
+    """Send one photo card per product, each with its own Buy button.
+
+    Falls back to a text card when a product has no usable image, so a missing
+    photo costs the shopper one picture rather than the whole result.
+    """
+    for rank, product in enumerate(products[:MAX_CARDS], start=1):
+        caption = _card_caption(rank, product)
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        f"Buy · {product['price_display']}",
+                        callback_data=f"{BUY_CALLBACK_PREFIX}{product['product_ref']}",
+                    )
+                ]
+            ]
+        )
+        image_url = product.get("image_url")
+        if image_url:
+            try:
+                await message.reply_photo(
+                    photo=image_url,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=keyboard,
+                )
+                continue
+            except TelegramError:
+                logger.warning("Could not send photo for %s", product["product_ref"])
+        await message.reply_text(caption, parse_mode="HTML", reply_markup=keyboard)
 
 
 def mini_app_url() -> str:
@@ -114,6 +192,54 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "not configured.)"
         )
     await message.reply_text(reply, reply_markup=keyboard)
+
+    # Cards come after the reply so the agent's framing line reads first.
+    await _send_product_cards(message, core.take_pending_results(user.id, chat.id))
+
+
+async def on_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start a purchase from a product card's Buy button."""
+    query = update.callback_query
+    if query is None or query.message is None or update.effective_user is None:
+        return
+    await query.answer()
+
+    product_ref = (query.data or "").removeprefix(BUY_CALLBACK_PREFIX)
+    # Price and title come from the catalogue row, not from the card's caption
+    # or anything the model wrote, so what is charged is what the shop lists.
+    product = catalog_db.get_product(product_ref)
+    if product is None:
+        await query.message.reply_text("Sorry, that product is no longer listed.")
+        return
+
+    user_id = update.effective_user.id
+    chat_id = query.message.chat_id
+    try:
+        payment = buy_and_pay.run(
+            merchant_name=product["merchant_name"],
+            product_name=product["title"],
+            product_ref=str(product["id"]),
+            amount_cents=round(float(product["price_min"]) * 100),
+            telegram_user_id=user_id,
+            telegram_chat_id=chat_id,
+        )
+    except Exception:
+        logger.exception("Could not start purchase for product %s", product_ref)
+        await query.message.reply_text(
+            "Sorry, I couldn't start that purchase. Please try again."
+        )
+        return
+
+    keyboard = _payment_keyboard(payment)
+    text = (
+        f"{_short_title(product['title'])}\n{payment['amount_display']} · "
+        f"{product['merchant_name']}"
+    )
+    if keyboard is None:
+        text += "\n\n(Checkout app is not configured, so payment cannot start.)"
+    else:
+        text += "\n\nTap the payment button to authorise with your passkey."
+    await query.message.reply_text(text, reply_markup=keyboard)
 
 
 async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -192,6 +318,9 @@ def main() -> None:
     # service message would otherwise never reach it.
     application.add_handler(
         MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_web_app_data)
+    )
+    application.add_handler(
+        CallbackQueryHandler(on_buy_callback, pattern=f"^{BUY_CALLBACK_PREFIX}")
     )
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     logger.info("Starting consumer-bot-live (polling)...")

@@ -52,3 +52,30 @@ def execute(sql: str, params: tuple | None = None) -> list[tuple]:
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
         return cur.fetchall()
+
+
+def get_product(product_id: str | int) -> dict | None:
+    """Fetch one catalogue product by id, or None if it does not exist.
+
+    Used by the Buy button so the order is priced from the catalogue row
+    rather than from text the model transcribed into a message.
+    """
+    try:
+        numeric_id = int(product_id)
+    except (TypeError, ValueError):
+        return None
+
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, merchant_name, price_min, currency, available
+            FROM public.catalog_products
+            WHERE id = %s
+            """,
+            (numeric_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        columns = [d.name for d in cur.description]
+        return dict(zip(columns, row))

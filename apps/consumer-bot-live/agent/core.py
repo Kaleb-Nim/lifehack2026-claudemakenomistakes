@@ -65,23 +65,26 @@ Rules:
 - Amounts are integer cents and default to SGD unless a tool says otherwise.
 - Do not greet after the first message, narrate reasoning, repeat the shopper's
   request, add generic reassurance, or end with "anything else?"
-- Normal replies are at most two short sentences or 60 words. Product results
-  may contain at most three compact options. Do not use Markdown tables.
+- Normal replies are at most two short sentences or 60 words. Do not use
+  Markdown tables.
+- After product_discovery, the application shows the shopper a photo card for
+  each product, with its price, merchant and a Buy button. Do NOT list, name,
+  describe or price the products - they can already see all of it, and
+  repeating it is the wall of text we are avoiding. Say one short line at most,
+  about what you filtered on or what to weigh up, then stop.
 
 Style and routing examples (placeholders are not catalogue facts):
 1. Shopper: "I need a laptop."
    Pluto: "What's your maximum budget?"
 2. Shopper: "New, under S$900, 16 GB RAM."
    Pluto: <call product_discovery with those constraints and limit 3>
-3. Tool returns three products.
-   Pluto: <show three numbered one-line options, then ask one decision question>
-4. Shopper: "I'll take option 1."
-   Pluto: <call buy_and_pay with option 1's exact fields>
-5. Tool returns ConfirmationRequired for Product A at S$849.
-   Pluto: "Confirm Product A for S$849? Reply ‘Confirm purchase’ to proceed."
-6. Shopper: "Confirm purchase."
-   Pluto: <call buy_and_pay again with the identical fields>
-7. Shopper: "Where is order abc-123?"
+3. Tool returns three products; the application renders them as cards.
+   Pluto: "Three under S$900 with 16 GB. The first is the cheapest in stock."
+4. Shopper taps a Buy button.
+   Pluto: <the application handles it; no tool call needed>
+5. Shopper: "Buy the second one instead."
+   Pluto: <call buy_and_pay with that product's exact fields>
+6. Shopper: "Where is order abc-123?"
    Pluto: <call check_order_status with order_id "abc-123">
 """
 
@@ -104,6 +107,19 @@ def take_pending_payment(
 ) -> dict[str, Any] | None:
     """Pop the payment awaiting a Mini App launch for this conversation."""
     return _pending_payments.pop((telegram_user_id, telegram_chat_id), None)
+
+
+# Search results awaiting rendering. bot.py draws these as photo cards, so the
+# model never has to describe a product list in prose - that is what turns a
+# result set into a wall of text.
+_pending_results: dict[tuple[int, int], list[dict[str, Any]]] = {}
+
+
+def take_pending_results(
+    telegram_user_id: int, telegram_chat_id: int
+) -> list[dict[str, Any]]:
+    """Pop the product cards waiting to be rendered for this conversation."""
+    return _pending_results.pop((telegram_user_id, telegram_chat_id), [])
 
 
 def _get_client() -> AsyncOpenAI:
@@ -162,6 +178,9 @@ async def _run_tool(
 
         if name == "buy_and_pay" and isinstance(result, dict):
             _pending_payments[conversation_key] = result
+
+        if name == "product_discovery" and isinstance(result, list) and result:
+            _pending_results[conversation_key] = result
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         return _json_result(
             {"ok": False, "error": str(exc), "error_type": type(exc).__name__}

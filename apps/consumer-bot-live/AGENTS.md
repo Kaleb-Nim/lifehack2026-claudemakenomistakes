@@ -92,6 +92,25 @@ wrong-user, failed-biometric, malformed-payload and replay cases — a replay of
 a valid payload is rejected as already paid rather than charging twice. Keep
 those checks if you touch that handler.
 
+## How results are shown
+
+Search results are rendered by `bot.py`, not written by the model. Each product
+becomes its own photo card — trimmed title, price, merchant, any considerations
+— with a Buy button. The model is told to add one short framing line and
+**never to list or price the products**, because a model describing five
+products is exactly the wall of text the cards exist to replace.
+
+- `core.take_pending_results()` mirrors `take_pending_payment()`: the tool
+  result is stashed by `_run_tool` and drained by `bot.py` after the reply.
+- `_short_title()` exists because supplier titles carry the whole spec sheet
+  and a repeated SKU. Do not show a raw catalogue title on a card.
+- The Buy button carries only the product id. `on_buy_callback` re-reads the
+  **catalogue row** for title and price, so the order is priced from the shop's
+  data rather than from anything the model transcribed.
+- A product with no usable image falls back to a text card, so one missing
+  photo costs a picture rather than the result.
+- `MAX_CARDS` caps the messages sent; the tool itself allows up to 10.
+
 ## Shopper memory
 
 `db/memory_db.build_context()` renders what is known about a shopper into the
