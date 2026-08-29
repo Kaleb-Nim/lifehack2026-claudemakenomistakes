@@ -1,6 +1,6 @@
 # LifeHack 2026 — Problem Statement (Visa, Digital Payments track)
 
-Source: Visa's "NUS Hackathon PPT" deck (slides 3, 7 & 8), photographed at the briefing. PDF scan: `docs/problem-statement.pdf`.
+Source: Visa's "NUS Hackathon PPT" deck (slides 3, 7, 8 & 10), photographed at the briefing. PDF scan: `docs/problem-statement.pdf`.
 
 ## Background
 
@@ -26,6 +26,14 @@ Source: Visa's "NUS Hackathon PPT" deck (slides 3, 7 & 8), photographed at the b
 4. **Trust, Consent and Transparency**
    - Show how users authorize agent-driven actions (e.g., confirming purchases)
    - Include safeguards: transaction previews, identity verification, confirmation before agent transacts
+
+## Judging Rubrics
+
+1. **Innovation** — Novelty of the agentic commerce experience
+2. **User Experience** — Simplicity and intuitiveness of the conversation flow
+3. **Technical Feasibility** — Realistic integration of AI + payment concepts
+4. **Scalability** — Applicability across merchants of different sizes
+5. **Trust and Safety** — Clear handling of consent, security and transparency
 
 ## Key constraints pulled from the statement
 

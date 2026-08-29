@@ -27,6 +27,14 @@ NUS SOC 24h hackathon: https://lifehack2026.nuscomputing.com/
    - Show how users authorize agent-driven actions (e.g., confirming purchases)
    - Include safeguards: transaction previews, identity verification, confirmation before agent transacts
 
+**Judging rubrics:**
+
+1. **Innovation** — Novelty of the agentic commerce experience
+2. **User Experience** — Simplicity and intuitiveness of the conversation flow
+3. **Technical Feasibility** — Realistic integration of AI + payment concepts
+4. **Scalability** — Applicability across merchants of different sizes
+5. **Trust and Safety** — Clear handling of consent, security and transparency
+
 Full notes: [`docs/problem-statement.md`](docs/problem-statement.md) · Slide scans: [`docs/problem-statement.pdf`](docs/problem-statement.pdf)
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
