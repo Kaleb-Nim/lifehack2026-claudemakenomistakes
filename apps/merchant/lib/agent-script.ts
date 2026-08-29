@@ -1,0 +1,165 @@
+// The scripted "brain" for the merchant onboarding voice agent.
+// Content here is SCRIPTED per .planning/phases/MERCH-02-real-time-voice-scripted-brain/02-CONTEXT.md
+// ("Determinism" decisions) — every agent line is spoken verbatim via a per-beat
+// `response.create` instruction (see lib/beat-runner.ts), never improvised by the model.
+// The seven tool names below are fixed by SCRIPT-03 and must not be renamed.
+// This file imports from lib/merchant-data.ts and never the reverse — merchant-data.ts
+// stays additive-only; agentLine/log/card copy there is the single source of truth for
+// on-screen and spoken text.
+
+import { FRAMES } from "./merchant-data";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+export type ToolName =
+  | "read_source"
+  | "search_web"
+  | "lock_fact"
+  | "flag_conflict"
+  | "resolve_flag"
+  | "ask_pill"
+  | "go_live";
+
+/** What causes the beat runner to advance past this beat. */
+export type AdvanceOn = "speech_stopped" | "pill" | "operator" | "audio_done";
+
+/** OpenAI Realtime `session.tools` entry — see 02-RESEARCH.md "Tools (SCRIPT-03)". */
+export interface RealtimeFunctionTool {
+  type: "function";
+  name: ToolName;
+  description: string;
+  parameters: Record<string, unknown>; // JSON Schema
+}
+
+/** A canned tool invocation the beat runner fires on beat entry (CONTEXT.md: "the client fires the tool calls"). */
+export interface BeatToolCall {
+  name: ToolName;
+  args: Record<string, unknown>;
+  /** Optional delay (ms) after beat entry before firing — omitted fires immediately. */
+  atMs?: number;
+}
+
+export interface Beat {
+  /** Aligned 1:1 with Frame["key"] so the runner can zip beats to frames by key, not index. */
+  key: string;
+  /** The exact line spoken via `response.instructions` — never the model's own transcript. */
+  line: string;
+  /** The owner's expected next turn, shown on the operator teleprompter (plan 02-03). */
+  ownerCue?: string;
+  advanceOn: AdvanceOn;
+  tools: BeatToolCall[];
+}
+
+/** A canned tool-handler result. `ok: false` never advances a beat. */
+export type CannedResult = { ok: true; summary?: string } | { ok: false; error: string };
+
+// ── System prompt — the agent is a mouth, not a brain, for this whole phase ─
+export const SYSTEM_PROMPT =
+  "You are the onboarding voice for an AI shopping-agent platform, guiding an electronics-shop " +
+  "owner through describing their shop. You are warm, brief and completely literal: every line " +
+  "you speak is provided to you verbatim for that turn, in the `instructions` of the request, and " +
+  "you must say ONLY that line, exactly as written, with no additions, no summarising, no " +
+  "pleasantries and no improvisation. Never invent facts about the shop. Never ask a question that " +
+  "was not given to you to ask. You are a mouth, not a brain.";
+
+// ── Tool schemas (SCRIPT-03) — all seven registered so the wire shape is real from day one ─
+const readSourceParams = (): RealtimeFunctionTool["parameters"] => ({
+  type: "object",
+  properties: { source: { type: "string", description: "File name or label of the uploaded source to read, e.g. a price-list PDF or a shelf photo." } },
+  required: ["source"],
+});
+
+export const TOOLS: RealtimeFunctionTool[] = [
+  {
+    type: "function", name: "read_source",
+    description: "Read an uploaded source (price list, flyer, photo, website) and extract what it says.",
+    parameters: readSourceParams(),
+  },
+  {
+    type: "function", name: "search_web",
+    description: "Look up the merchant's website to check model names and listings.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "The site or search query, e.g. a domain name." } }, required: ["query"] },
+  },
+  {
+    type: "function", name: "lock_fact",
+    description: "Record a confirmed fact about the shop into the locked-in log.",
+    parameters: { type: "object", properties: { fact: { type: "string", description: "The confirmed fact, in the exact wording that should appear in the log." } }, required: ["fact"] },
+  },
+  {
+    type: "function", name: "flag_conflict",
+    description: "Flag a conflict between two sources (e.g. two different prices for the same product).",
+    parameters: { type: "object", properties: { conflict: { type: "string", description: "Description of the conflicting data points." } }, required: ["conflict"] },
+  },
+  {
+    type: "function", name: "resolve_flag",
+    description: "Resolve a previously flagged conflict once the owner has clarified it.",
+    parameters: {
+      type: "object",
+      properties: {
+        conflict: { type: "string", description: "The conflict being resolved, matching a prior flag_conflict call." },
+        resolution: { type: "string", description: "How it was resolved, in the exact wording that should replace the flag in the log." },
+      },
+      required: ["conflict", "resolution"],
+    },
+  },
+  {
+    type: "function", name: "ask_pill",
+    description: "Present the owner with a fixed choice between two short options (rendered as pill buttons).",
+    parameters: {
+      type: "object",
+      properties: { question: { type: "string" }, options: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 2 } },
+      required: ["question", "options"],
+    },
+  },
+  {
+    type: "function", name: "go_live",
+    description: "Publish the finished listing so shoppers can find the merchant.",
+    parameters: { type: "object", properties: {} },
+  },
+];
+
+// ── Tool handlers — only lock_fact is implemented in this plan; the rest throw a ─
+// ── clearly labelled not-yet-implemented error that plan 02-03 replaces with real ─
+// ── canned results mapped onto lib/merchant-data.ts values. ─────────────────────
+const notImplemented = (name: ToolName) => (): CannedResult => {
+  throw new Error(`TOOL_HANDLERS.${name} is not implemented until plan 02-03`);
+};
+
+export const TOOL_HANDLERS: Record<ToolName, (args: Record<string, unknown>) => CannedResult> = {
+  lock_fact: (args) => ({ ok: true, summary: typeof args.fact === "string" ? args.fact : undefined }),
+  read_source: notImplemented("read_source"),
+  search_web: notImplemented("search_web"),
+  flag_conflict: notImplemented("flag_conflict"),
+  resolve_flag: notImplemented("resolve_flag"),
+  ask_pill: notImplemented("ask_pill"),
+  go_live: notImplemented("go_live"),
+};
+
+// ── The beats — only A and B in this plan; 02-02 fills in C through G ───────
+export const BEATS: Beat[] = [
+  {
+    key: "A",
+    line: FRAMES[0].agentLine,
+    advanceOn: "speech_stopped",
+    tools: [{ name: "lock_fact", args: { fact: "Shop: Bizgram Asia · Sim Lim Square #05-50" } }],
+  },
+  {
+    key: "B",
+    line: FRAMES[1].agentLine,
+    advanceOn: "speech_stopped",
+    tools: [],
+  },
+];
+
+export function beatIndexOf(key: string): number {
+  return BEATS.findIndex((b) => b.key === key);
+}
+
+/** Builds the "say this exactly" `response.instructions` string (02-RESEARCH.md "SCRIPT-02"). */
+export function verbatim(line: string): string {
+  return `Say this exactly, word for word, and nothing else: ${line}`;
+}
+
+// ── Beat-advance timing constants ───────────────────────────────────────────
+export const MIN_SPEECH_MS = 1200; // a cough or an "mm" cannot advance a take
+export const SETTLE_MS = 400;      // pause before the agent's next line starts
+export const AUDIO_TIMEOUT_MS = 2000; // no audio within this window of response.create = dropped session

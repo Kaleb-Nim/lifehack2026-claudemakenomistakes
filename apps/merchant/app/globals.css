@@ -220,3 +220,4 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .vsep { width: 2px; height: 34px; background: var(--color-neutral-300); }
 .btn-type { display: flex; align-items: center; gap: 9px; padding: 13px 22px 13px 18px; border-radius: 999px; background: var(--color-neutral-200); font-size: 17px; font-weight: 600; white-space: nowrap; }
 .btn-type:hover { background: var(--color-neutral-300); }
+.orb.connecting { --beat: 2.2s; }
