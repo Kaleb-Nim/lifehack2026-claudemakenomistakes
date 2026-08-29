@@ -2,11 +2,11 @@
 
 Real, database-backed consumer agent (see `AGENTS.md` for the architecture
 and what's implemented vs. stubbed). Not the demo bot — that's
-`apps/consumer-bot`.
+`demo/consumer-bot`.
 
 ## Set up
 
-Run these commands from `apps/consumer-bot-live`:
+Run these commands from `live/consumer-bot-live`:
 
 ```sh
 python3.13 -m venv .venv

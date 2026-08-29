@@ -4,11 +4,11 @@
 // plain async functions over the filesystem so it is trivial to call from a route handler
 // (see app/api/upload/route.ts) or, later, from a server action / tool handler.
 //
-// Disk layout (relative to process.cwd(), i.e. apps/merchant/ when the dev server runs):
+// Disk layout (relative to process.cwd(), i.e. demo/merchant/ when the dev server runs):
 //   uploads/index.json        — JSON array of StoredSource, the single source of truth for listing
 //   uploads/<id>/<filename>   — original bytes for a pdf/image source (website sources have no file)
 //
-// `uploads/` is gitignored (see apps/merchant/.gitignore) and created on first write.
+// `uploads/` is gitignored (see demo/merchant/.gitignore) and created on first write.
 
 import { promises as fs } from "node:fs";
 import path from "node:path";

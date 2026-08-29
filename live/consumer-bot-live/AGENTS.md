@@ -1,8 +1,8 @@
 # consumer-bot-live — read this first
 
 This is the **real, DB-backed** consumer agent — the exploration of what
-`apps/consumer-bot` (the hardcoded demo bot) becomes after the hackathon
-demo ships. It is a separate app, not a replacement yet: `apps/consumer-bot`
+`demo/consumer-bot` (the hardcoded demo bot) becomes after the hackathon
+demo ships. It is a separate app, not a replacement yet: `demo/consumer-bot`
 stays as-is for the demo video/DevPost submission. Do not touch it from here.
 
 ## Architecture (2026-08-29 direction)
@@ -55,7 +55,7 @@ Telegram  <->  bot.py  <->  agent/core.py (OpenAI tool-calling loop)
 | `tools/product_discovery.py` | **Implemented** — hybrid BM25 + pgvector, weighted RRF, budget filter. Degrades to lexical-only if the query can't be embedded. |
 | `tools/check_order_status.py`, `tools/cancel_order.py` | Implemented (thin wrappers over `orders_db`). Cancel's "notify merchant dashboard" half is a TODO — no merchant API exists yet. |
 | `tools/buy_and_pay.py` | **Implemented** — creates a `pending` order and hands off to the Mini App. Does not settle; `bot.py` does. |
-| `mini_app/` | Ported from `apps/consumer-bot/`, plus an `order_id` param so a payload identifies which order it settles. |
+| `mini_app/` | Ported from `demo/consumer-bot/`, plus an `order_id` param so a payload identifies which order it settles. |
 | `db/memory_db.py`, `tools/remember.py`, `schema/memory.sql` | **Implemented** — durable shopper facts + purchase history, injected into the prompt. |
 | `agent/core.py` | Implemented Responses API loop; dispatches all five tools. |
 | `bot.py` | Full loop: agent reply, Mini App launch button, and payment settlement. |

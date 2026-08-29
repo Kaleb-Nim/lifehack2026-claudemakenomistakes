@@ -1,14 +1,14 @@
 # Consumer bot — read this first (consumer-flow pair and your agents)
 
-This repo is a **monorepo**. The Telegram bot lives here, in `apps/consumer-bot/`, and this directory is yours.
+This repo is a **monorepo**. The Telegram bot lives here, in `demo/consumer-bot/`, and this directory is yours.
 
 ```
 /                    context only — docs/, AGENTS.md, .planning/. Do NOT put app code at the root.
-apps/merchant/       merchant onboarding web page, Next.js (Kaleb's half). Don't edit unless coordinated.
-apps/consumer-bot/   ← you are here. Python 3.10+ / python-telegram-bot. Moved from root `consumer_bot/` on 2026-08-29.
+demo/merchant/       merchant onboarding web page, Next.js (Kaleb's half). Don't edit unless coordinated.
+demo/consumer-bot/   ← you are here. Python 3.10+ / python-telegram-bot. Moved from root `consumer_bot/` on 2026-08-29.
 ```
 
-Everything that was in `consumer_bot/` is here unchanged (`bot.py`, `content.py`, `flow.py`, `tests/`). Run and verify exactly as `README.md` says, from this directory. There is no Bun/Node here; the root `package.json` workspaces only cover `apps/merchant`.
+Everything that was in `consumer_bot/` is here unchanged (`bot.py`, `content.py`, `flow.py`, `tests/`). Run and verify exactly as `README.md` says, from this directory. There is no Bun/Node here; the root `package.json` workspaces only cover `demo/merchant`.
 
 ## What this app is
 
@@ -23,7 +23,7 @@ Read before changing the script:
 ## Rules
 
 - **Hardcoded** until the video is on DevPost: fake the thinking (~5 s "Searching…"), fake the Visa authorisation. No LLM calls, no real payment APIs, no connectors.
-- Token in `apps/consumer-bot/.env` as `TELEGRAM_BOT_TOKEN` (copy `.env.example`). Never commit `.env`.
+- Token in `demo/consumer-bot/.env` as `TELEGRAM_BOT_TOKEN` (copy `.env.example`). Never commit `.env`.
 - Keep the pure state-transition tests green (`python -m unittest discover -s tests -v`) — they are the only tests in the repo and they guard the consent step.
-- Commit small and often. Don't touch `apps/merchant/` or root files without a word in the group.
+- Commit small and often. Don't touch `demo/merchant/` or root files without a word in the group.
 - Project status/roadmap: `../../.planning/` (GSD). Phase 2 = this bot; success criteria in `ROADMAP.md`.

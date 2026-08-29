@@ -1,12 +1,12 @@
 # Pluto Telegram consumer demo
 
-This directory (`apps/consumer-bot/`, part of the monorepo — see `AGENTS.md` here) contains the deterministic Telegram purchase flow for the
+This directory (`demo/consumer-bot/`, part of the monorepo — see `AGENTS.md` here) contains the deterministic Telegram purchase flow for the
 LifeHack 2026 demo. It uses long polling and simulates Visa confirmation; it
 does not process a real payment.
 
 ## Set up
 
-Run these commands from `apps/consumer-bot`:
+Run these commands from `demo/consumer-bot`:
 
 ```sh
 python3.13 -m venv .venv
@@ -77,7 +77,7 @@ the bot accepts it only while that user is at the Visa confirmation step.
 ## Verify
 
 Run formatting, linting, and the pure state-transition tests from
-`apps/consumer-bot`:
+`demo/consumer-bot`:
 
 ```sh
 ruff format .

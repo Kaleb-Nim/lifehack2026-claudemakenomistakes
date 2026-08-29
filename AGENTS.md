@@ -1,17 +1,18 @@
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `apps/merchant/node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `demo/merchant/node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
 # Repo layout (monorepo)
 
 Bun workspaces. **The root is context only** (`docs/`, `.planning/`, this file) — never put app code here.
 
-- `apps/merchant/` — merchant onboarding web page, Next.js 16 App Router + Tailwind v4. Kaleb's half. Layout comes from the Claude Design project "Merchant voice agent onboarding" (`Merchant Onboarding v3.dc.html` → `FrameQuiet2`); copy comes from `docs/merchant-page-design-brief.md` and is final. Demo content lives in `apps/merchant/lib/merchant-data.ts`.
-- `apps/consumer-bot/` — consumer Telegram bot, **Python** (`python-telegram-bot`), deterministic shopper flow with simulated Visa checkout. The consumer pair's half; it has its own `AGENTS.md` and README (venv, ruff, unittest). Was `consumer_bot/` at the root until 2026-08-29.
-- Run: `bun run dev:merchant` from root for the web page; `python bot.py` inside `apps/consumer-bot` for the bot. JS side uses `bun`, never npm/node.
-- GSD is per app: the merchant page's roadmap/state is `apps/merchant/.planning/` (run `/gsd-progress` from `apps/merchant`). There is no root-level `.planning/`.
+- `demo/merchant/` — merchant onboarding web page, Next.js 16 App Router + Tailwind v4. Kaleb's half. Layout comes from the Claude Design project "Merchant voice agent onboarding" (`Merchant Onboarding v3.dc.html` → `FrameQuiet2`); copy comes from `docs/merchant-page-design-brief.md` and is final. Demo content lives in `demo/merchant/lib/merchant-data.ts`.
+- `demo/consumer-bot/` — consumer Telegram bot, **Python** (`python-telegram-bot`), deterministic shopper flow with simulated Visa checkout. The consumer pair's half; it has its own `AGENTS.md` and README (venv, ruff, unittest). Was `consumer_bot/` at the root until 2026-08-29.
+- `live/consumer-bot-live/` — live consumer Telegram bot implementation.
+- Run: `bun run dev:merchant` from root for the web page; `python bot.py` inside `demo/consumer-bot` for the bot. JS side uses `bun`, never npm/node.
+- GSD is per app: the merchant page's roadmap/state is `demo/merchant/.planning/` (run `/gsd-progress` from `demo/merchant`). There is no root-level `.planning/`.
 
 
 # Hackathon context
@@ -51,7 +52,7 @@ Sources of truth: `docs/visa-mentor-meeting-2026-08-29.md` (what the Visa judge 
 
 **Merchant onboarding is voice-first (decided 2026-08-29, Sahi + Kaleb).** Full 5-minute flow: `docs/merchant-onboarding-voice-flow.md`. **2-minute demo-video cut (the shootable script): `docs/demo-video-script-merchant.md`.**
 - **Two merchant scripts currently exist and have not been reconciled:** `docs/merchant-onboarding-demo-script.md` (Kaleb — 2:30, modelled on the real Bizgram Asia, laptops/components) and `docs/demo-video-script-merchant.md` (Sahi — 2:10, fictional Hock Seng Electronics, audio/chargers). Kaleb's real-shop grounding is the better base; the pieces worth transplanting from Sahi's are the **skip mechanic**, the **confirm → Visa payout → live ending**, and the seam in `docs/demo-video-running-order.md`. Pick one before shooting.
-- **Merchant names do not match across the demo.** Kaleb's script says Bizgram Asia, Sahi's says Hock Seng Electronics, and `apps/consumer-bot/content.py` sells a NovaBook Pro 14 from **Nova Electronics**. Whichever merchant script wins, `content.py` must be renamed to match — otherwise segment 2 sells a product the audience never watched get onboarded.
+- **Merchant names do not match across the demo.** Kaleb's script says Bizgram Asia, Sahi's says Hock Seng Electronics, and `demo/consumer-bot/content.py` sells a NovaBook Pro 14 from **Nova Electronics**. Whichever merchant script wins, `content.py` must be renamed to match — otherwise segment 2 sells a product the audience never watched get onboarded.
 - **Video running order: merchant onboarding (~2:00) first, then the consumer interface.** The seam between them — what segment 1 hands segment 2, and what segment 2 must not repeat — is specified in `docs/demo-video-running-order.md`. Read it before writing the consumer script.
 - Merchants come to our website, agree to a 5-minute onboarding, and **talk to a voice agent** — there is no catalogue dashboard. A dashboard is the overused answer and the wrong one for Singapore SMEs, who are not mid-tech-savvy and would rather talk than type. This is our novelty claim.
 - Three live panels during the call: **file uploads**, a **confirmed-facts panel** (also the correction surface for spoken prices), and a **transcript**.

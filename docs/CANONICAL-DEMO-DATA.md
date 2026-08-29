@@ -1,6 +1,6 @@
 # Canonical demo data — single source of truth
 
-**Every surface must match this file.** Merchant onboarding (`apps/merchant`), consumer bot (`apps/consumer-bot`), the merchant payments dashboard (Claude Design), the pitch video and the demo video all draw their names, products and prices from here. If you need to change one, change it here first and tell the other owners.
+**Every surface must match this file.** Merchant onboarding (`demo/merchant`), consumer bot (`demo/consumer-bot`), the merchant payments dashboard (Claude Design), the pitch video and the demo video all draw their names, products and prices from here. If you need to change one, change it here first and tell the other owners.
 
 Last updated 2026-08-29. (Product name set to **Cashew** — the repo-wide rename; §1 previously said Pluto.)
 
@@ -112,10 +112,10 @@ These appear in the repo and must be replaced. **Ah Seng Electronics**, **Hock S
 
 | Where | Currently | Change to |
 |---|---|---|
-| `apps/consumer-bot/content.py` | `MERCHANT_NAME = "Nova Electronics"` | `"Bizgram Asia"` |
-| `apps/consumer-bot/content.py` | catalogue has no Bizgram item | add ASUS Vivobook 15 (X1504VA) at $849 as the Bizgram listing |
-| `apps/consumer-bot/tests/test_flow.py` | asserts on product names | update to match |
-| `apps/merchant/lib/merchant-data.ts` | Bizgram Asia ✓ (already correct) | align catalogue + prices to §3 |
+| `demo/consumer-bot/content.py` | `MERCHANT_NAME = "Nova Electronics"` | `"Bizgram Asia"` |
+| `demo/consumer-bot/content.py` | catalogue has no Bizgram item | add ASUS Vivobook 15 (X1504VA) at $849 as the Bizgram listing |
+| `demo/consumer-bot/tests/test_flow.py` | asserts on product names | update to match |
+| `demo/merchant/lib/merchant-data.ts` | Bizgram Asia ✓ (already correct) | align catalogue + prices to §3 |
 | Payments dashboard (Claude Design) | Ah Seng Electronics, two outlets | §5 |
 | `docs/pitch-video-30s-brief.md` | Hock Seng Electronics | Bizgram Asia |
 | `docs/demo-video-script-merchant.md` | Hock Seng Electronics, Sim Lim + Bedok | Bizgram Asia, one outlet |

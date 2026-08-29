@@ -2,7 +2,7 @@
 
 Segment 1 of the demo video. **2:30**, eight screen states, one take per path.
 
-This is the shoot-day script for the *built page* (`apps/merchant`), not the earlier hardcoded
+This is the shoot-day script for the *built page* (`demo/merchant`), not the earlier hardcoded
 storyboard in `docs/merchant-onboarding-demo-script.md`. Every line, price and figure here is
 copied out of the running code (`lib/merchant-data.ts`, `lib/agent-context.md`), which in turn
 follows `docs/CANONICAL-DEMO-DATA.md`. If this doc and the screen ever disagree, the screen wins
@@ -17,7 +17,7 @@ Cast: **you play the shop owner.** The agent plays itself.
 | | |
 |---|---|
 | Run | `bun run dev:merchant` from the repo root → `http://localhost:3000` |
-| Key | `OPENAI_API_KEY` in `apps/merchant/.env.local` — **live path only** |
+| Key | `OPENAI_API_KEY` in `demo/merchant/.env.local` — **live path only** |
 | Audio | **Headset. Always.** On speakers the agent hears its own voice, the mic gate trips and it cuts itself off mid-line. This is the single most common ruined take. |
 | Window | Full screen, 16:9, bookmarks bar hidden. The stage is a fixed 1920×1080 canvas that scales to fit — any other aspect gives you letterboxing. |
 | Undo | `←` steps back a state. It is your only undo, and it is enough. |
@@ -45,7 +45,7 @@ path and it is fully working today.
 
 **Path S works today, with no dependencies.** Film it now. Path L is being built underneath you —
 plan 02-02 was mid-execution in the working tree as this was written, so check `git status` in
-`apps/merchant` before you count on any of it.
+`demo/merchant` before you count on any of it.
 
 Four things have to land for a clean live take, and they land in this order:
 
@@ -283,8 +283,8 @@ closing line; open on a vaguer ask and let the agent narrow it down.
 
 ## 8. Changing what the agent says
 
-- **Spoken words, live agent** → `apps/merchant/lib/agent-context.md`. Read from disk on every orb
+- **Spoken words, live agent** → `demo/merchant/lib/agent-context.md`. Read from disk on every orb
   tap: edit it between takes, tap the orb, no rebuild, no restart.
-- **Printed words on screen** → `FRAMES[].agentLine` in `apps/merchant/lib/merchant-data.ts`.
+- **Printed words on screen** → `FRAMES[].agentLine` in `demo/merchant/lib/merchant-data.ts`.
 - **Prices, products, the shop** → `docs/CANONICAL-DEMO-DATA.md` first, then the code. Never the
   other way round.

@@ -1,6 +1,6 @@
-# apps/merchant — merchant onboarding page
+# demo/merchant — merchant onboarding page
 
-This directory is one GSD project: **the merchant side only**. `.planning/` here is its roadmap/state (`/gsd-progress` from this directory). The consumer Telegram bot (`apps/consumer-bot`) belongs to another developer — don't plan or build for it here.
+This directory is one GSD project: **the merchant side only**. `.planning/` here is its roadmap/state (`/gsd-progress` from this directory). The consumer Telegram bot (`demo/consumer-bot`) belongs to another developer — don't plan or build for it here.
 
 - Layout: Claude Design "Merchant voice agent onboarding" → `Merchant Onboarding v3.dc.html` → `FrameQuiet2`. Tokens in `app/globals.css`.
 - Copy/data: `lib/merchant-data.ts`, verbatim from `../../docs/merchant-page-design-brief.md`. Component: `components/Onboarding.tsx`.

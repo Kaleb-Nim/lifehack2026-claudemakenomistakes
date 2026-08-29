@@ -102,7 +102,7 @@ export default async function DashboardPage() {
         {!d.configured ? (
           <p className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" }}>
             Not connected. Set <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_KEY</code> in{" "}
-            <code>apps/merchant/.env.local</code>, then reload.
+            <code>demo/merchant/.env.local</code>, then reload.
           </p>
         ) : d.error ? (
           <p className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-accent-100)", color: "var(--color-accent-800)" }}>
