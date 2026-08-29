@@ -145,7 +145,7 @@ agent does — CONTEXT.md) plus a live/connection readout for the operator.
 | Property | Contract |
 |---|---|
 | Content | `Beat {n}/{N}` · the **owner's** next scripted line (pulled from the beat's `caption`/expected-turn field in `lib/agent-script.ts`) · a mic-state glyph (live / muted) · a connection dot |
-| Placement | `position: fixed; left: 16px; bottom: 16px; z-index: 9999` on the **viewport**, not the `.stage` — anchored in the letterboxed margin outside the scaled 1920×1080 stage so it can never overlap stage content. Recording must run at `scale < 1` (a margin exists) — call this out as an operational constraint for Phase 4, not something the component can force at exactly 100% scale. |
+| Placement | `position: fixed; left: 16px; bottom: 16px; z-index: 9999` on the **viewport**, not the `.stage` — anchored in the letterboxed margin outside the scaled 1920×1080 stage so it can never overlap stage content. The margin exists only when the viewport aspect ratio differs from 16:9 — **not** whenever `scale < 1`. The fit is `min(w/1920, h/1080)`; on a 16:9 viewport both ratios are equal, the stage fills both axes, and there is no leftover on either. Measured: 2560x1440 gives scale 1.333 and zero margin; 1366x768 gives scale 0.711 and 0.3px. Every 16:10 viewport yields 32-66px vertically. The component must therefore compute the band at runtime — `innerHeight - 1080 * min(innerWidth/1920, innerHeight/1080)` — and not assume one exists. |
 | Visual language | Deliberately **not** on-brand: dark translucent panel (`rgba(20,20,20,0.88)` background, `#fff` text), `var(--font-mono)` (reuses the existing mono token so it reads as system chrome, not stage content), `13px`, `10px 14px` padding, `8px` radius, `box-shadow: 0 4px 16px rgba(0,0,0,0.4)`, max-width `360px`. Never uses `--color-accent` or any stage neutral — this is the "operator can never mistake it for page content" requirement. |
 | Connection dot | 8px circle, non-brand palette so it's never confused with the accent: green `#2ecc71` connected/live, amber `#f5a623` connecting, grey `#888` scripted/fallback, red `#e74c3c` error/denied. |
 | Mic glyph | Existing mic icon with a slash overlay when `M` (mute) is toggled — the only visible feedback for the mute key (see §7). |
@@ -371,9 +371,28 @@ are not written into the shoot checklist:
 1. **Do one silent orb tap before rolling.** The browser's native permission dialog cannot be
    suppressed by the component; granting the origin beforehand is the only way it never appears on
    camera (§6).
-2. **Record at `scale < 1`.** The teleprompter and status chip are anchored in the letterboxed
-   margin outside the scaled stage. At exactly 1920×1080 there is no margin, and the component
-   cannot force one (§4).
+2. **Record in a NON-16:9 window.** The teleprompter and status chip live in the letterboxed
+   margin outside the scaled stage, and that margin exists only when the viewport's aspect ratio
+   differs from 16:9 — size and scale are irrelevant. Any 16:9 window kills the overlays, including
+   2560x1440 (scale 1.333, zero margin) and 1280x720, not just 1920x1080. A "is the scale below 1?"
+   check does **not** catch this: 1366x768 is 16:9 at scale 0.711 with 0.3px of margin, while
+   2560x1440 is 16:9 above 100% scale with none.
+
+   Measured gutters (top/bottom):
+
+   | Viewport | Scale | Margin | Verdict |
+   |---|---|---|---|
+   | 1920x1080 · 16:9 | 1.000 | 0 | overlays have nowhere to go |
+   | 2560x1440 · 16:9 | 1.333 | 0 | overlays have nowhere to go |
+   | 1366x768 · 16:9 | 0.711 | 0.3px | overlays have nowhere to go |
+   | 1512x982 · 16:10 | 0.787 | 65.8px | works |
+   | 1440x900 · 16:10 | 0.750 | 45px | works |
+   | 1280x800 · 16:10 | 0.667 | 40px | works |
+   | 1024x640 · 16:10 | 0.533 | 32px | works |
+
+   Authoring on any MacBook 16:10 viewport is fine. The honest runtime check, if the overlays need a
+   guaranteed band of `N` px, is `innerHeight - 1080 * min(innerWidth/1920, innerHeight/1080) >= N`
+   — evaluated live, never inferred from window size (§4).
 
 ---
 
