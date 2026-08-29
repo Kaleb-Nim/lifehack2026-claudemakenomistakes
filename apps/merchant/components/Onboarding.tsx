@@ -83,6 +83,9 @@ export default function Onboarding() {
   const captionText = voice.phase === "live" ? (voice.caption ?? "") : caption;
   const captionVisible = voice.phase === "live" ? !!voice.caption : (!!frame.caption && !live && !voiceActive);
   const captionCaretOn = voice.phase === "live" ? voice.hearing : true;
+  // Rolling history of finalized owner turns (QUICK-caption-history.md) — real-session-only;
+  // ?mode=scripted's typewriter caption stays exactly as it was (VOICE-05, byte-identical).
+  const captionHistory = voice.phase === "live" ? voice.captionHistory : [];
   // Real session states take priority; a session that never started (idle) or that
   // dropped back to scripted mode falls through to the exact Phase 1 derivation
   // (UI-SPEC §1, priority table row 5) — one chain, no parallel orb-state variable.
@@ -159,10 +162,32 @@ export default function Onboarding() {
             <div className="centre-text">
               <div className="orb-label">{orbLabel}</div>
               <div className="agent-line" key={agentLine}>{agentLine}</div>
-              {captionVisible && (
-                <div className="caption">
-                  <div className="caption-text">{captionText}{captionCaretOn && <span className="caret" />}</div>
-                </div>
+              {voice.phase === "live" ? (
+                // Real-session mode: stack up to 3 finalized turns above the in-progress one,
+                // newest at the bottom, oldest visually recessive — the point of the task is
+                // that this survives a frame advance (unlike the single-turn `caption` above,
+                // which unmounts with the beat). Only the in-progress entry gets a caret.
+                (captionVisible || captionHistory.length > 0) && (
+                  <div className="caption-stack">
+                    {captionHistory.map((entry, i) => (
+                      <div key={entry.id} className={`caption caption-history caption-history-${captionHistory.length - i}`}>
+                        <div className="caption-text">{entry.text}</div>
+                      </div>
+                    ))}
+                    {captionVisible && (
+                      <div className="caption caption-current">
+                        <div className="caption-text">{captionText}{captionCaretOn && <span className="caret" />}</div>
+                      </div>
+                    )}
+                  </div>
+                )
+              ) : (
+                // ?mode=scripted / pre-session: identical DOM to Phase 1, untouched.
+                captionVisible && (
+                  <div className="caption">
+                    <div className="caption-text">{captionText}{captionCaretOn && <span className="caret" />}</div>
+                  </div>
+                )
               )}
               {frame.pills && !live && (
                 <div className="pills">
