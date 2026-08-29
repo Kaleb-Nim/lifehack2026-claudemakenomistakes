@@ -12,10 +12,13 @@ function StatusChip({ status }: { status: Order["status"] }) {
   // "Paid" is decoration.
   if (status === "paid") return null;
   const label = status === "held" ? "Held for review" : status === "pending" ? "Pending" : "Cancelled";
+  const muted = status === "cancelled";
   return (
     <span
       className="rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap"
-      style={{ background: "var(--color-accent-200)", color: "var(--color-accent-800)" }}
+      style={ muted
+        ? { background: "var(--color-neutral-200)", color: "var(--color-neutral-600)" }
+        : { background: "var(--color-accent-200)", color: "var(--color-accent-800)" } }
     >
       {label}
     </span>
@@ -58,7 +61,7 @@ export default async function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-2xl p-6" style={{ background: "var(--color-neutral-100)" }}>
-          <div className="text-sm" style={{ color: "var(--color-neutral-600)" }}>Collected today</div>
+          <div className="text-sm" style={{ color: "var(--color-neutral-600)" }}>Collected {d.dayLabel}</div>
           <div className="mt-2 text-4xl font-semibold tracking-tight">{money(d.collectedCents)}</div>
           <div className="mt-2 text-sm" style={{ color: "var(--color-neutral-600)" }}>
             {d.paidCount} {d.paidCount === 1 ? "order" : "orders"} · all paid in chat
@@ -90,7 +93,9 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-4 text-xl font-semibold tracking-tight">Payments today</h2>
+        <h2 className="mb-4 text-xl font-semibold tracking-tight">
+          Payments {d.dayLabel}
+        </h2>
 
         {!d.configured ? (
           <p className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" }}>
@@ -130,14 +135,17 @@ export default async function DashboardPage() {
                       {o.time}
                     </td>
                     <td className="px-6 py-4 align-top">
-                      <div className="font-medium">{o.product}</div>
+                      <div className="font-medium break-words" style={{ maxWidth: "46ch" }}>{o.product}</div>
                       <div className="mt-0.5 text-sm" style={{ color: "var(--color-neutral-600)" }}>
                         {o.shopper}
                         {o.note ? ` · ${o.note}` : ""} · {MERCHANT.product} chat
                       </div>
                     </td>
                     <td className="px-6 py-4 align-top"><StatusChip status={o.status} /></td>
-                    <td className="px-6 py-4 text-right align-top font-medium whitespace-nowrap">
+                    <td
+                      className="px-6 py-4 text-right align-top font-medium whitespace-nowrap"
+                      style={o.status === "cancelled" ? { textDecoration: "line-through", color: "var(--color-neutral-500)" } : undefined}
+                    >
                       {money(o.amountCents)}
                     </td>
                   </tr>

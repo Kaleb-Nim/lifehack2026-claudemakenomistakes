@@ -19,69 +19,106 @@ export interface DashboardData {
   heldCount: number;
   feesCents: number;
   payoutCents: number;
+  /** "today", or a formatted date when the latest data is older */
+  dayLabel: string;
   /** false only when credentials are missing */
   configured: boolean;
-  /** set when the query itself failed — shown instead of pretending there is no data */
+  /** set when the query itself failed */
   error: string | null;
-  /** merchants that DO have rows, when the filtered merchant has none */
+  /** merchants that do have rows, when ours has none */
   otherMerchants: string[];
 }
 
 const FEE_RATE = 0.021;
+const TZ = "Asia/Singapore";
 
-// Which merchant this dashboard belongs to. Override with MERCHANT_NAME in
-// .env.local when the catalogue uses a different legal name; leave as "*" to
-// show every merchant's orders.
-const FILTER = process.env.MERCHANT_NAME ?? MERCHANT.name;
+// Substring match, case-insensitive, so the dashboard finds the merchant
+// however the catalogue spells it — "Bizgram Asia", "Bizgram Asia Pte Ltd",
+// "BIZGRAM ASIA PTE. LTD." all match the token "bizgram". Override with
+// MERCHANT_NAME in .env.local; "*" shows every merchant.
+// An unset OR blank MERCHANT_NAME both fall back to the canonical token —
+// "" is a string, so ?? alone would leave an empty match that matches every row.
+const MATCH =
+  (process.env.MERCHANT_NAME?.trim() || MERCHANT.matchToken).toLowerCase();
 
-function sgTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-SG", {
-    hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Singapore",
+function sgParts(iso: string) {
+  const d = new Date(iso);
+  return {
+    day: d.toLocaleDateString("en-CA", { timeZone: TZ }), // YYYY-MM-DD
+    time: d.toLocaleTimeString("en-SG", {
+      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ,
+    }),
+  };
+}
+
+function labelForDay(day: string): string {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+  if (day === today) return "today";
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-SG", {
+    day: "numeric", month: "short", timeZone: "UTC",
   });
 }
 
 interface Row {
-  id: string; created_at: string; telegram_user_id: number;
-  product_name: string; product_ref: string | null; amount_cents: number;
-  status: Order["status"]; merchant_name: string;
+  id: string; created_at: string; telegram_user_id: number | null;
+  product_name: string | null; product_ref: string | null;
+  amount_cents: number | null; status: string | null; merchant_name: string | null;
   shopper_handle?: string | null;
 }
 
+const VALID = new Set(["pending", "paid", "held", "cancelled"]);
+
 const base = (): DashboardData => ({
   orders: [], collectedCents: 0, paidCount: 0, heldCents: 0, heldCount: 0,
-  feesCents: 0, payoutCents: 0, configured: true, error: null, otherMerchants: [],
+  feesCents: 0, payoutCents: 0, dayLabel: "today", configured: true,
+  error: null, otherMerchants: [],
 });
 
 export async function getDashboardData(): Promise<DashboardData> {
   const supabase = getSupabase();
   if (!supabase) return { ...base(), configured: false };
 
-  // select("*") rather than naming columns: shopper_handle only exists once
-  // schema/001 has been applied, and naming a missing column fails the query.
+  // select("*") not named columns: shopper_handle only exists after
+  // schema/001, and naming a column that is missing fails the whole query.
   const { data, error } = await supabase
     .from("orders")
     .select("*")
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(500);
 
   if (error) return { ...base(), error: error.message };
 
   const all = (data ?? []) as Row[];
-  const mine = FILTER === "*" ? all : all.filter((r) => r.merchant_name === FILTER);
+  const mine =
+    MATCH === "*"
+      ? all
+      : all.filter((r) => (r.merchant_name ?? "").toLowerCase().includes(MATCH));
 
   if (mine.length === 0) {
-    const others = [...new Set(all.map((r) => r.merchant_name))].filter(Boolean);
+    const others = [...new Set(all.map((r) => r.merchant_name).filter(Boolean))] as string[];
     return { ...base(), otherMerchants: others };
   }
 
-  const orders: Order[] = mine.map((r) => ({
-    id: r.id,
-    time: sgTime(r.created_at),
-    shopper: r.shopper_handle ?? `user ${r.telegram_user_id}`,
-    product: r.product_name,
-    note: r.product_ref,
-    amountCents: r.amount_cents,
-    status: r.status,
-  }));
+  // Show the most recent day that actually has orders, rather than a hard
+  // "today" filter — seed data written last night must still appear today.
+  const latestDay = sgParts(mine[0].created_at).day;
+  const forDay = mine.filter((r) => sgParts(r.created_at).day === latestDay);
+
+  const orders: Order[] = forDay
+    .map((r) => {
+      const status = (r.status ?? "pending").toLowerCase();
+      return {
+        id: r.id,
+        time: sgParts(r.created_at).time,
+        shopper: r.shopper_handle ?? (r.telegram_user_id ? `user ${r.telegram_user_id}` : "—"),
+        product: r.product_name?.trim() || "Unnamed item",
+        note: r.product_ref?.trim() || null,
+        amountCents: r.amount_cents ?? 0,
+        status: (VALID.has(status) ? status : "pending") as Order["status"],
+      };
+    })
+    .reverse(); // oldest first for reading down the day
 
   const paid = orders.filter((o) => o.status === "paid");
   const held = orders.filter((o) => o.status === "held");
@@ -97,6 +134,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     heldCount: held.length,
     feesCents,
     payoutCents: collectedCents - feesCents,
+    dayLabel: labelForDay(latestDay),
   };
 }
 

@@ -29,3 +29,6 @@ next-env.d.ts
 
 # Claude Code agent worktrees — local scratch, never committed
 .claude/worktrees/
+
+# team standard is bun.lock — keep npm's lockfile local only
+package-lock.json
