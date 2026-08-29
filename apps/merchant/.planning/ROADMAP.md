@@ -58,11 +58,11 @@ The demo video is recorded on a page where the **voice is real and the brain is 
 
 ### Phase 4: Record the demo
 **Goal**: The merchant segment is recorded from this page in one take and lands the handoff to the consumer segment
-**Depends on**: Phase 3; script decision (Bizgram vs Hock Seng) with Sahi
+**Depends on**: Phase 3; merchant *script structure* decision with Sahi (the merchant and the data are already settled by `docs/CANONICAL-DEMO-DATA.md`)
 **Requirements**: REC-01 … REC-04
 **UI hint**: yes
 **Success Criteria**:
-  1. One reconciled merchant script; `lib/agent-script.ts` and `lib/merchant-data.ts` match it verbatim
+  1. One reconciled merchant script; `lib/agent-script.ts` and `lib/merchant-data.ts` match it verbatim (`merchant-data.ts` already matches canonical §3 as of 2026-08-29 — only the script structure is open)
   2. A full run-through at 1080p with real voice both ways, no keypress except pills and Go live
   3. Ending line sets up the consumer segment per `docs/demo-video-running-order.md`; segment uploaded/handed to the editor
 **Plans**: 2 plans
@@ -87,7 +87,7 @@ The demo video is recorded on a page where the **voice is real and the brain is 
 **Requirements**: GRAPH-01 … GRAPH-03
 **Success Criteria**:
   1. `docs/graph-schema.md` agreed; seed script loads Bizgram + a second merchant
-  2. Go live MERGEs merchant/products/relationships; the bot finds the Swift Go 14 with both prices and stock per location
+  2. Go live MERGEs merchant/products/relationships; the bot finds the **ASUS Vivobook 15 (X1504VA) at $849** — the §3 spine product — with its shelf/store stock at the single #05-50 outlet (canonical §2: one outlet, no per-location split)
 **Plans**: TBD
 - [ ] 06-01: Schema doc + connection + seed
 - [ ] 06-02: Go live → Neo4j write

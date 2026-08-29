@@ -83,8 +83,11 @@ Node/relationship names above are the proposed contract — agree them with the 
 | Scripted brain behind real voice for the video | Agent lines spoken verbatim, tool handlers canned — deterministic takes, no derailing, and the UI only ever reacts to tool calls so the real brain is a handler swap | — Pending |
 | Uploads are real, reading is canned | Real thumbnails/filenames on screen; extraction is the expensive, flaky part | — Pending |
 | Graph last | The bot can be seeded from `catalog.json`; the page doesn't need Neo4j to be filmed | — Pending |
-| Bizgram copy from the brief, not the design file's "Ah Seng" sample | Repo docs mark the Bizgram copy as final | ⚠️ Revisit — script reconciliation with Hock Seng pending |
+| Bizgram copy from the brief, not the design file's "Ah Seng" sample | Repo docs mark the Bizgram copy as final | ✓ Settled 2026-08-29 — canonical §6 retires Ah Seng / Hock Seng / Nova and all second outlets |
+| `docs/CANONICAL-DEMO-DATA.md` is the source of truth for all page data | Four surfaces (this page, the bot, the payments dashboard, the videos) have to read as one product; a doc beats four copies of the numbers | ✓ Good — `lib/merchant-data.ts` re-derived from §3 on 2026-08-29; counts now flow from one `CATALOGUE_COUNT` export |
+| Product name is **Cashew**, and the doc was changed to match the code | The repo-wide rename was newer than the doc's `Pluto`; keeping two names on camera was the real risk | ✓ Settled 2026-08-29 (Kaleb) |
+| Closing hero card = ASUS Vivobook 15 ($849), not the Acer Swift Go 14 | §3 spine product: the last thing the merchant segment shows must be the exact product the consumer segment sells | ✓ Settled 2026-08-29 — Swift Go 14 keeps the state-D price-conflict beat |
 | Fixed 1920×1080 stage scaled via CSS transform | Recording target is 1080p; brief excludes responsive | ✓ Good |
 
 ---
-*Last updated: 2026-08-29 — phases re-ordered: real-time voice first, graph last*
+*Last updated: 2026-08-29 — canonical demo data adopted as the page's source of truth (name, catalogue, hero). Earlier: phases re-ordered — real-time voice first, graph last.*

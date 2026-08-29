@@ -88,20 +88,14 @@ Keep `interrupt_response: false` and the mic gate either way (see below).
 - `?mode=scripted` unchanged.
 - Editing `agent-context.md` changes the agent's behaviour on the next session with no rebuild.
 
-## Open, for Kaleb — do not silently resolve
+## Resolved 2026-08-29 — no longer open
 
-`docs/CANONICAL-DEMO-DATA.md` §3 and `lib/merchant-data.ts` disagree on the catalogue, and the
-spoken copy depends on the counts:
+The catalogue conflict this section raised is **closed in canonical's favour**, by a separate
+user-directed pass. `lib/merchant-data.ts` now carries the `docs/CANONICAL-DEMO-DATA.md` §3 ten
+items verbatim (4 laptops + 6 accessories), the closing line says "Four laptops and six accessories",
+and a single `CATALOGUE_COUNT` export drives both the `Product listing · 10 items` label and the
+Go-live note. `lib/agent-context.md` already followed canonical, so the two files now agree.
 
-- Canonical has **4 laptops + 6 accessories** (adds Lenovo IdeaPad Slim 5, TP-Link Archer AX55,
-  Samsung T7; drops Swift Go 14 Touch, Swift 14 AI, Swift Go 16, Targus backpack).
-- `merchant-data.ts` has **6 laptops + 5 accessories = 11 products**, and the agent's closing line
-  and the Go-live note both say exactly that ("Six laptops and five accessories are ready",
-  "11 products").
+The product name is **Cashew** — canonical §1 was rewritten to match the repo-wide rename.
 
-Aligning to canonical breaks that spoken copy, which the design brief marks final and which the
-consumer half also references. Either canonical changes or the copy does — it is a script decision
-affecting Sahi's segment too, so it needs a human call, not a silent edit.
-
-`agent-context.md` currently follows **canonical §3** for the catalogue, since a shopper buying the
-ASUS Vivobook 15 at $849 is the spine of all three demos.
+Nothing in this file needs a human call any more. The acceptance criteria above still stand.

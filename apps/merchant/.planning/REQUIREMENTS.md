@@ -5,6 +5,8 @@
 
 Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (Phase 6) is the shared contract.
 
+**Data source of truth:** `docs/CANONICAL-DEMO-DATA.md`. Every name, product, price, stock figure and count rendered by this app derives from it — `lib/merchant-data.ts` and `lib/agent-context.md` hold no independent values. Change the doc first, then the code.
+
 ## v1 Requirements
 
 ### Demo page (hardcoded) — Phase 1
@@ -45,7 +47,7 @@ Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (
 
 ### Recording readiness — Phase 4
 
-- [ ] **REC-01**: One merchant script chosen (Bizgram vs Hock Seng); script + data files match it verbatim
+- [ ] **REC-01**: One merchant script chosen; script + data files match it verbatim. **Partly met 2026-08-29** — the merchant is settled (Bizgram Asia, one outlet: canonical §2, and §6 retires Hock Seng) and `lib/merchant-data.ts` + `lib/agent-context.md` already match §3 verbatim. What remains is which *script structure* to shoot: Kaleb's 2:30 real-shop cut vs the skip mechanic and confirm → Visa payout → live ending from Sahi's
 - [ ] **REC-02**: Full 1080p run-through with real voice both ways and only pill/Go live clicks
 - [ ] **REC-03**: Ending line hands off to the consumer segment per `docs/demo-video-running-order.md`
 - [ ] **REC-04**: Optional simulated Visa payout-setup step before Go live, if the reconciled script keeps it
@@ -60,7 +62,7 @@ Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (
 ### Neo4j graph — Phase 6
 
 - [ ] **GRAPH-01**: Schema agreed with the consumer-bot developer in `docs/graph-schema.md`
-- [ ] **GRAPH-02**: Seed script loads Bizgram's 11 products + a second merchant stub
+- [ ] **GRAPH-02**: Seed script loads Bizgram's **10** products (the canonical §3 catalogue, `CATALOGUE_COUNT`) + a second merchant stub
 - [ ] **GRAPH-03**: Go live MERGEs merchant/products/relationships idempotently
 
 ## Out of Scope
@@ -88,4 +90,4 @@ Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (
 
 ---
 *Requirements defined: 2026-08-29*
-*Last updated: 2026-08-29 — phases re-ordered: real voice with scripted brain before uploads; graph last*
+*Last updated: 2026-08-29 — all page data re-derived from `docs/CANONICAL-DEMO-DATA.md` (catalogue 11 → 10, hero = ASUS Vivobook 15, name = Cashew); REC-01 partly met, GRAPH-02 count corrected. Earlier: phases re-ordered — real voice with scripted brain before uploads; graph last.*
