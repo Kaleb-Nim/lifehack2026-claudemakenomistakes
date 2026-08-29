@@ -28,9 +28,14 @@ Telegram  <->  bot.py  <->  agent/core.py (OpenAI tool-calling loop)
 - **Orders (buy/status/cancel)** live in **Supabase** — see `schema/orders.sql`.
   This bot talks to Supabase with the `service_role` key (trusted backend,
   never a public client), so RLS is locked down to service-role-only.
-- **The agent brain** (`agent/core.py`) is an OpenAI tool-calling loop over
-  the four tools in `agent/tool_schemas.py`. **Not wired up yet on purpose**
-  — that's being built separately from this scaffold.
+- **The agent brain** (`agent/core.py`) is an OpenAI Responses API tool-calling
+  loop over the four tools in `agent/tool_schemas.py`. It keeps in-process
+  conversation continuity per Telegram user/chat; continuity resets on restart.
+- **Purchase confirmation is enforced in Python**, not trusted to prompting:
+  the first `buy_and_pay` call records the exact payload and returns
+  `ConfirmationRequired`; only an explicit confirmation in the shopper's next
+  message authorizes that identical payload. Any change requires confirmation
+  again.
 - Memory (shopper preference persistence) is deliberately out of scope for
   now — ignore the MEMORY box in the architecture diagram until told
   otherwise.
@@ -44,8 +49,8 @@ Telegram  <->  bot.py  <->  agent/core.py (OpenAI tool-calling loop)
 | `schema/orders.sql` | Real, but **not yet applied** to the live Supabase project — see below. |
 | `tools/check_order_status.py`, `tools/cancel_order.py` | Implemented (thin wrappers over `orders_db`). Cancel's "notify merchant dashboard" half is a TODO — no merchant API exists yet. |
 | `tools/product_discovery.py`, `tools/buy_and_pay.py` | Stubs (`NotImplementedError`) — need the confirmed catalog schema / Mini App wiring respectively. |
-| `agent/core.py` | Stub — OpenAI wiring not started. |
-| `bot.py` | Runs end-to-end today; replies with a placeholder until `agent/core.py` is implemented. |
+| `agent/core.py` | Implemented Responses API loop; dispatches all four tools. |
+| `bot.py` | Runs end-to-end and returns the agent reply. |
 
 ## Working here concurrently
 

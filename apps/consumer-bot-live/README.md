@@ -18,8 +18,8 @@ cp .env.example .env
 Fill in `.env`:
 
 - `TELEGRAM_BOT_TOKEN` — from BotFather.
-- `OPENAI_API_KEY` — not used yet (agent/core.py is a stub), but required
-  once that's wired up.
+- `OPENAI_API_KEY` — used by the Responses API tool-calling loop.
+- `OPENAI_MODEL` — optional model override; defaults to `gpt-5-mini`.
 - `CATALOG_DATABASE_URL` — the Railway Postgres+ParadeDB service's
   `DATABASE_PUBLIC_URL` (Variables tab in the Railway dashboard). Not
   `DATABASE_URL` — that one only resolves from inside Railway's network.
@@ -81,5 +81,9 @@ set +a
 python bot.py
 ```
 
-Every message currently gets a placeholder reply — `agent/core.py` (the
-OpenAI tool-calling loop) isn't wired up yet.
+Messages now run through the OpenAI Responses API and can call all four tools.
+Replies use low verbosity and a concise commerce dialogue policy. Purchases
+have a Python-enforced two-turn confirmation gate: the shopper must confirm the
+exact product and amount in their next message before `buy_and_pay` can run.
+`product_discovery` and `buy_and_pay` are still scaffolded, so the agent will
+report those paths as temporarily unavailable until their implementations land.

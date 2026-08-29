@@ -2,8 +2,7 @@
 
 Thin by design: this just wires Telegram updates to agent.core.handle_message.
 The actual "brain" (OpenAI tool-calling loop + tools/*.py) lives elsewhere so
-it can be built independently of this file. Until agent/core.py is wired up,
-every message gets a placeholder reply instead of crashing the bot.
+it can be built independently of this file.
 """
 
 from __future__ import annotations
@@ -44,10 +43,11 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             telegram_chat_id=chat.id,
             text=message.text,
         )
-    except NotImplementedError:
+    except Exception:
+        logger.exception("Failed to handle Telegram message")
         reply = (
-            "(consumer-bot-live skeleton: agent/core.py isn't wired up "
-            "yet, so I can't actually answer that. See AGENTS.md.)"
+            "Sorry, I couldn't reach the shopping service just now. "
+            "Please try again in a moment."
         )
     await message.reply_text(reply)
 
@@ -56,8 +56,7 @@ def main() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN is not set. Copy .env.example to .env and "
-            "fill it in."
+            "TELEGRAM_BOT_TOKEN is not set. Copy .env.example to .env and fill it in."
         )
 
     application = Application.builder().token(token).build()
