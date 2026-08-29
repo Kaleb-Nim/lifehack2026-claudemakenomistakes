@@ -36,6 +36,7 @@ from telegram.error import TelegramError
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
@@ -312,6 +313,27 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_order_list(message, core.take_pending_orders(user.id, chat.id))
 
 
+async def on_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start a fresh conversation without restarting the bot.
+
+    Telegram has no "new chat" for a DM, so without this the only way to clear
+    a thread is restarting the process - which resets it for every shopper at
+    once, not just the one who asked.
+    """
+    message = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+    if message is None or user is None or chat is None:
+        return
+
+    core.reset_conversation(user.id, chat.id)
+    await message.reply_text(
+        "Started a new conversation. I still remember what you've told me "
+        "before and your past orders.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+
 async def on_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start a purchase from a product card's Buy button."""
     query = update.callback_query
@@ -475,6 +497,8 @@ def main() -> None:
     application.add_handler(
         CallbackQueryHandler(on_buy_callback, pattern=f"^{BUY_CALLBACK_PREFIX}")
     )
+    # /start behaves as /new so a returning shopper gets a clean thread.
+    application.add_handler(CommandHandler(["new", "start", "reset"], on_new))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     logger.info("Starting consumer-bot-live (polling)...")
     application.run_polling()

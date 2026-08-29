@@ -146,6 +146,29 @@ products is exactly the wall of text the cards exist to replace.
   a status mark per order and an 8-character id prefix. Full UUIDs are
   unreadable in chat and never need typing back.
 
+## Sessions
+
+Telegram has no "new chat" for a DM, so a conversation would otherwise chain
+forever — and every turn re-sends the whole thread via `previous_response_id`,
+making each reply slower and dearer than the last. Two boundaries end a session:
+
+- **`/new`** (also `/start`, `/reset`) — `core.reset_conversation()` clears that
+  one shopper's thread. Before this the only reset was restarting the process,
+  which resets *everyone*, so a single bad conversation could not be cleared
+  mid-demo.
+- **30 minutes idle** (`SESSION_IDLE_TIMEOUT_SECONDS`) — checked at the top of
+  a turn, so the message starts a new session rather than continuing an old one.
+  Timestamps are `time.monotonic()`, not wall clock, so a clock change cannot
+  expire or resurrect a session.
+
+A reset clears conversational state only. Stored facts and orders live in
+Supabase and deliberately survive, so a new session still knows the shopper —
+when testing a reset, clear `user_memories` too or the model will look like it
+"remembered" through the boundary when it merely re-read memory.
+
+Sessions are **not** persisted: a bot restart clears every thread. That is
+deliberate; the durable half is already in Supabase.
+
 ## Shopper memory
 
 `db/memory_db.build_context()` renders what is known about a shopper into the

@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -50,6 +51,11 @@ Rules:
   always use, a standing budget ceiling, how they prefer to collect - call
   remember once with that fact. Only record what they actually said, never an
   inference, and never mention that you saved it unless they ask.
+- Remember only what would still be useful weeks from now, and only if it would
+  change what you recommend. Never remember what they are shopping for right
+  now, anything about the current conversation, or arbitrary values they hand
+  you such as codewords, numbers or test strings. When in doubt, do not call
+  remember: a wrong or pointless memory is worse than none.
 - Once the shopper chooses a product, call buy_and_pay with the exact tool
   result fields. This creates a pending order and opens the payment app, where
   the shopper authorises with their passkey. Do not ask them to confirm in
@@ -95,9 +101,37 @@ Style and routing examples (placeholders are not catalogue facts):
 DEFAULT_MODEL = "gpt-5-mini"
 MAX_TOOL_ROUNDS = 8
 
+# Telegram has no "new chat" for a DM, so a conversation would otherwise run
+# forever: every turn re-sends the whole thread via previous_response_id, making
+# each reply slower and dearer than the last. A session ends either when the
+# shopper says so (/new) or after this much silence - returning tomorrow should
+# not resume yesterday's half-finished shopping.
+SESSION_IDLE_TIMEOUT_SECONDS = 30 * 60
+
 _client: AsyncOpenAI | None = None
 _previous_response_ids: dict[tuple[int, int], str] = {}
 _conversation_locks: dict[tuple[int, int], asyncio.Lock] = {}
+# Monotonic timestamp of each conversation's last turn, for the idle timeout.
+# Monotonic rather than wall clock so a system clock change cannot expire or
+# resurrect a session.
+_last_turn_at: dict[tuple[int, int], float] = {}
+
+
+def reset_conversation(telegram_user_id: int, telegram_chat_id: int) -> bool:
+    """Start a fresh thread for this conversation. Returns True if one existed.
+
+    Clears only conversational state. Stored facts and orders live in Supabase
+    and deliberately survive, so a new session still knows the shopper.
+    """
+    conversation_key = (telegram_user_id, telegram_chat_id)
+    existed = _previous_response_ids.pop(conversation_key, None) is not None
+    _last_turn_at.pop(conversation_key, None)
+    _pending_payments.pop(conversation_key, None)
+    _pending_cancellations.pop(conversation_key, None)
+    _pending_results.pop(conversation_key, None)
+    _pending_orders.pop(conversation_key, None)
+    return existed
+
 
 # Orders that have been created but not yet paid for. bot.py drains this after
 # each turn to attach the Mini App launch button, which the agent loop cannot
@@ -252,6 +286,15 @@ async def _handle_message_locked(
     client = _get_client()
     conversation_key = (telegram_user_id, telegram_chat_id)
     model = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
+
+    # Expire an idle session before doing anything else, so this turn is treated
+    # as the start of a new conversation rather than a continuation.
+    last_turn = _last_turn_at.get(conversation_key)
+    now = time.monotonic()
+    if last_turn is not None and now - last_turn > SESSION_IDLE_TIMEOUT_SECONDS:
+        logger.info("Session idle for %.0fs; starting a new one.", now - last_turn)
+        reset_conversation(telegram_user_id, telegram_chat_id)
+    _last_turn_at[conversation_key] = now
 
     # Only the first turn of a chain needs the memory block: later turns inherit
     # it through previous_response_id, so re-sending would pay for it twice.
