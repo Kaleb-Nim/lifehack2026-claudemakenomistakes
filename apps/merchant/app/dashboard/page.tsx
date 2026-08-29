@@ -1,5 +1,6 @@
 import { getDashboardData, money, type Order } from "@/lib/orders";
 import { MERCHANT } from "@/lib/merchant-profile";
+import LiveRefresh from "./LiveRefresh";
 
 // Always render fresh: a sale made in the Telegram bot must appear on the
 // merchant's dashboard on the next load, with no cache in between.
@@ -93,9 +94,10 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-4 text-xl font-semibold tracking-tight">
-          Payments {d.dayLabel}
-        </h2>
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <h2 className="text-xl font-semibold tracking-tight">Payments {d.dayLabel}</h2>
+          <LiveRefresh />
+        </div>
 
         {!d.configured ? (
           <p className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" }}>
