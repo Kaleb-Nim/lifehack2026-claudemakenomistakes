@@ -60,7 +60,10 @@ const EVENT_LOG_MAX = 50;
 // `conversation.item.input_audio_transcription.delta` / `…completed`) degrades to a missing
 // caption rather than a crash. The caption is decorative and never gates a beat.
 const TRANSCRIPTION_DELTA_SUFFIX = "input_audio_transcription.delta";
-const TRANSCRIPTION_COMPLETED_SUFFIX = "input_audio_transcription.completed";
+// Exported (not local-only) so lib/beat-runner.ts can independently recognize the same
+// event, matched by suffix for the same reason, to finalize a turn into its rolling
+// caption history (QUICK-caption-history.md) without duplicating the suffix string.
+export const TRANSCRIPTION_COMPLETED_SUFFIX = "input_audio_transcription.completed";
 
 function isPermissionError(err: unknown): boolean {
   return err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError" || err.name === "SecurityError");

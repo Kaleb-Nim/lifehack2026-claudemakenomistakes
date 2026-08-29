@@ -17,8 +17,18 @@
 // only ever get a reply, never an early cut). See 02-02-PLAN.md Tasks 2 and 3.
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { useRealtimeSession, type RealtimeEvent, type SessionFailure, type SessionPhase } from "../hooks/useRealtimeSession";
+import { useRealtimeSession, TRANSCRIPTION_COMPLETED_SUFFIX, type RealtimeEvent, type SessionFailure, type SessionPhase } from "../hooks/useRealtimeSession";
 import { AUDIO_TIMEOUT_MS, BEATS, ECHO_GRACE_MS, MIN_REPLY_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, beatIndexOf, type AdvanceOn, type Beat } from "./agent-script";
+
+/** Maximum finalized owner turns kept in the rolling caption history (QUICK-caption-history.md). */
+const CAPTION_HISTORY_MAX = 3;
+
+/** A single finalized turn in the caption history. `id` is a stable React key — the array
+ * itself is rebuilt (sliced) on every push, so index alone is not stable across a shift. */
+export interface CaptionHistoryEntry {
+  id: number;
+  text: string;
+}
 
 /** The slice of useOnboardingState() the runner needs — kept structural, not imported, to avoid coupling this module to the hook's full surface. */
 export interface BeatRunnerOnboarding {
@@ -65,6 +75,15 @@ export interface BeatRunnerApi {
    * `null` but both render no bubble; components/Onboarding.tsx only needs the truthiness.
    */
   caption: string | null;
+  /**
+   * Up to CAPTION_HISTORY_MAX most-recently finalized owner turns, oldest first / newest
+   * last (QUICK-caption-history.md) — a short glance-back, not a transcript log. A turn is
+   * appended here once its `…input_audio_transcription.completed` event lands, provided the
+   * turn cleared MIN_SPEECH_MS (the same gate `caption` above uses — a cough never enters
+   * history either). Survives a frame advance (unlike `caption`, which is unmounted with the
+   * beat); cleared on disconnect or a fresh session.
+   */
+  captionHistory: CaptionHistoryEntry[];
 }
 
 /**
@@ -83,6 +102,25 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
    * every fresh owner turn.
    */
   const [captionSuppressed, setCaptionSuppressed] = useState(false);
+  /** Rolling history of finalized owner turns (see BeatRunnerApi.captionHistory doc). */
+  const [captionHistory, setCaptionHistory] = useState<CaptionHistoryEntry[]>([]);
+  const captionHistoryIdRef = useRef(0);
+  /**
+   * Whether the turn that just closed (speech_stopped) cleared MIN_SPEECH_MS — decides
+   * whether its eventual `…completed` transcript is pushed into captionHistory. Reset to
+   * false on every fresh owner turn (input_audio_buffer.speech_started) so a turn with no
+   * completed event, or one that never qualified, can never leak in. Safe against the
+   * completed event racing the *next* turn's speech_started: the hard mic gate in
+   * hooks/useRealtimeSession.ts keeps the owner's track disabled until well after the
+   * agent's whole reply finishes, so the next speech_started is always far later than this
+   * turn's completed event.
+   */
+  const turnQualifiedRef = useRef(false);
+  /** Last-seen session.phase, for the render-time captionHistory-clear check below — state,
+   * not a ref, because the react-compiler lint forbids reading/writing a ref during render
+   * (the "adjusting state when a prop changes" pattern requires useState here, same idiom
+   * components/Onboarding.tsx's useTypewriter already uses). */
+  const [prevSessionPhase, setPrevSessionPhase] = useState<SessionPhase>("idle");
   const currentBeatRef = useRef<Beat | null>(null);
   /** When the current beat became current — the clock a `minDwellMs` is measured against. */
   const beatEnteredAtRef = useRef(0);
@@ -224,6 +262,8 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       // A fresh turn — the caption bubble (if any) is allowed to show again; the underlying
       // text itself is reset by hooks/useRealtimeSession.ts on this same event.
       setCaptionSuppressed(false);
+      // A fresh turn never inherits the previous one's history eligibility.
+      turnQualifiedRef.current = false;
 
       // Echo rejection. Speech that begins while the agent is talking, or in the short tail
       // after it stops, is the agent's own audio coming back through the speakers — not the
@@ -257,9 +297,26 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       // still get a spoken reply.
       if (spokenMs < MIN_SPEECH_MS) { setCaptionSuppressed(true); return; }
 
+      // This turn cleared the same bar the visible caption uses — its eventual
+      // `…completed` transcript (below) is eligible to join captionHistory.
+      turnQualifiedRef.current = true;
+
       const beat = currentBeatRef.current;
       if (!beat || beat.advanceOn !== "speech_stopped") return;
       advance(beat);
+      return;
+    }
+
+    if (typeof event.type === "string" && event.type.endsWith(TRANSCRIPTION_COMPLETED_SUFFIX)) {
+      // Finalization point for caption history (QUICK-caption-history.md) — matched by
+      // suffix for the same forward-compat reason hooks/useRealtimeSession.ts matches it.
+      if (turnQualifiedRef.current && typeof event.transcript === "string" && event.transcript) {
+        captionHistoryIdRef.current += 1;
+        const entry: CaptionHistoryEntry = { id: captionHistoryIdRef.current, text: event.transcript };
+        setCaptionHistory((h) => [...h, entry].slice(-CAPTION_HISTORY_MAX));
+      }
+      // Consumed — never let a second/stray completed event for the same turn double-push.
+      turnQualifiedRef.current = false;
     }
   }, [advance, sendResponseCreate]);
 
@@ -271,6 +328,17 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     phaseRef.current = session.phase;
     connectRef.current = session.connect;
   });
+
+  // History clears on disconnect or a fresh session (QUICK-caption-history.md) — any phase
+  // other than "live" (idle before the first tap, connecting, or scripted after a drop)
+  // means the previous session's history no longer applies. Adjusted during render on a
+  // phase change (React's documented "adjusting state when a prop changes" pattern, same
+  // idiom components/Onboarding.tsx's useTypewriter already uses) rather than from inside
+  // an effect, which would call setState synchronously on every render of that effect.
+  if (prevSessionPhase !== session.phase) {
+    setPrevSessionPhase(session.phase);
+    if (session.phase !== "live" && captionHistory.length > 0) setCaptionHistory([]);
+  }
 
   // Enter the first beat and open the conversation exactly once, the moment the session
   // goes live — a bare reply, not a scripted line; the session config sent at mint time is
@@ -306,5 +374,6 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     beatNumber: beatIndex + 1,
     beatTotal: BEATS.length,
     caption: captionSuppressed ? null : session.caption,
+    captionHistory,
   };
 }
