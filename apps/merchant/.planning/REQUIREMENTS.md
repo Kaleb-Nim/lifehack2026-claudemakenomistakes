@@ -3,7 +3,7 @@
 **Defined:** 2026-08-29
 **Core Value:** The video visibly shows upload-anything → structured products → category-smart questions → Go live — with a voice agent that really listens and really talks.
 
-Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (Phase 6) is the shared contract.
+Scope: `apps/merchant` only. The consumer bot is out of scope.
 
 **Data source of truth:** `docs/CANONICAL-DEMO-DATA.md`. Every name, product, price, stock figure and count rendered by this app derives from it — `lib/merchant-data.ts` and `lib/agent-context.md` hold no independent values. Change the doc first, then the code.
 
@@ -59,12 +59,6 @@ Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (
 - [ ] **BRAIN-03**: Cross-source conflicts detected and surfaced as `!` lines; agent resolves by asking
 - [ ] **BRAIN-04**: Agent converses freely under the category-trained prompt and asks the laptop-shop questions unprompted
 
-### Neo4j graph — Phase 6
-
-- [ ] **GRAPH-01**: Schema agreed with the consumer-bot developer in `docs/graph-schema.md`
-- [ ] **GRAPH-02**: Seed script loads Bizgram's **10** products (the canonical §3 catalogue, `CATALOGUE_COUNT`) + a second merchant stub
-- [ ] **GRAPH-03**: Go live MERGEs merchant/products/relationships idempotently
-
 ## Out of Scope
 
 | Feature | Reason |
@@ -74,6 +68,7 @@ Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (
 | Auth, tests, CI, dashboards | 24 h; brief forbids dashboard vocabulary |
 | Phone layout / dark mode | Brief §7 |
 | Real STT/TTS other than the Realtime API | One API does both |
+| Neo4j product graph (was GRAPH-01…03) | Dropped 2026-08-29; the bot seeds from `catalog.json`, the page never needed the graph to be filmed |
 
 ## Traceability
 
@@ -84,10 +79,9 @@ Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (
 | UP-01 … UP-05 | Phase 3 | Pending |
 | REC-01 … REC-04 | Phase 4 | Pending |
 | BRAIN-01 … BRAIN-04 | Phase 5 | Pending |
-| GRAPH-01 … GRAPH-03 | Phase 6 | Pending |
 
-**Coverage:** v1 requirements: 34 total · mapped: 34 · unmapped: 0 ✓
+**Coverage:** v1 requirements: 31 total · mapped: 31 · unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-29*
-*Last updated: 2026-08-29 — all page data re-derived from `docs/CANONICAL-DEMO-DATA.md` (catalogue 11 → 10, hero = ASUS Vivobook 15, name = Cashew); REC-01 partly met, GRAPH-02 count corrected. Earlier: phases re-ordered — real voice with scripted brain before uploads; graph last.*
+*Last updated: 2026-08-29 — Phase 6 (Neo4j graph) and GRAPH-01…03 removed from the roadmap. Earlier: all page data re-derived from `docs/CANONICAL-DEMO-DATA.md` (catalogue 11 → 10, hero = ASUS Vivobook 15, name = Cashew); REC-01 partly met, GRAPH-02 count corrected. Earlier: phases re-ordered — real voice with scripted brain before uploads; graph last.*

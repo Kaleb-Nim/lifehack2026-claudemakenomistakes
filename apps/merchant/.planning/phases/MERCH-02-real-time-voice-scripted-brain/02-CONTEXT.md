@@ -11,7 +11,7 @@ Turn the orb into a **live OpenAI GPT Realtime session over WebRTC** — the own
 
 In scope: `app/api/realtime/session` ephemeral-key route, WebRTC session setup, mic in / audio out, input + output transcription onto the page, the beat runner, the seven canned tools, operator controls, and a silent fallback to the Phase 1 keyboard demo.
 
-Out of scope: real extraction, real web fetch, free-form conversation (Phase 5); real file uploads (Phase 3); Neo4j (Phase 6). The **visual layer is out of scope** — no layout, class-name, styling or copy changes.
+Out of scope: real extraction, real web fetch, free-form conversation (Phase 5); real file uploads (Phase 3). The **visual layer is out of scope** — no layout, class-name, styling or copy changes.
 
 </domain>
 
