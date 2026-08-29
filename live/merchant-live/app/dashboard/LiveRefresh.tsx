@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-// Polls /api/orders so a sale closed in a Pluto chat lands on the dashboard
+// Polls /api/orders so a sale closed in a Cashew chat lands on the dashboard
 // without anyone touching the keyboard — the moment the demo depends on.
 // router.refresh() re-runs the Server Component, so the page keeps rendering
 // from the server and no Supabase credential is ever needed in the browser.

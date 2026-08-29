@@ -90,6 +90,41 @@ as props rather than importing this into a Client Component.
 `/api/catalog` was already agnostic — it requires `merchantName` per request
 and has no default.
 
+## Ingest pipeline (the real product, not the demo)
+
+Everything a merchant gives us converges on one path:
+
+```
+CSV / spreadsheet ─┐
+crawled listings ──┼─► lib/ingest/normaliser.ts ─► review() ─► lib/catalog.ts ─► catalog_products
+spoken facts ──────┘        (LLM mapping)        (verification)   (publish + embed)
+```
+
+**`lib/ingest/normaliser.ts` is the model between the data and the DB.** Column
+heuristics fail on the second merchant — "Model", "Item", "Description" and
+"Product Name" all mean title and none reliably. So an LLM maps, and Structured
+Outputs with `strict: true` means it cannot return a field we do not have or a
+category outside `lib/ingest/categories.ts`.
+
+**Structured Outputs guarantees shape, not truth.** `review()` re-checks the
+two fields where being wrong is expensive:
+
+- A **price** not present in the source is stripped and raised as a gap rather
+  than published. Comparison is digit-only, because 129900 cents appears in the
+  source as "1,299.00" and would never match as a substring.
+- A **title** not present in the source is dropped entirely.
+
+Measured against a deliberately awful CSV, it mapped four products across
+nonstandard headers, and correctly refused a `SUBTOTAL,,2437.00` row — which
+had a plausible price and would otherwise have become a phantom product.
+
+**Unpriced products are never published.** A listing a shopper cannot buy is
+worse than no listing, so it becomes a gap with a question instead.
+
+**Consolidate, then ask.** `NormaliseResult.gaps` and `.followUp` are part of
+the contract, not extras: after mapping, the agent asks the merchant about what
+is missing and whether anything is left to add. Do not drop them on the floor.
+
 ## Still canned
 
 The fork did **not** make extraction real. `lib/canned-extracts.ts` still
