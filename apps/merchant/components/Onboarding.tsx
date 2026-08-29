@@ -92,8 +92,14 @@ export default function Onboarding() {
   const agentLine = live ? LIVE_LINE : frame.agentLine;
   const header = live ? "Live" : frame.header;
 
-  // Drop bar → simulate the uploads landing (jump to State C from A/B).
-  const simulateUpload = () => { if (idx < 2) go(2); };
+  // Drop bar → simulate the uploads landing. In a live session this is beat B's own
+  // "upload" signal (lib/beat-runner.ts fires the runner's tools and walks the cursor
+  // itself); in scripted mode / before the orb is ever tapped it keeps the exact Phase 1
+  // behaviour of jumping straight to State C.
+  const simulateUpload = () => {
+    if (voice.phase === "live") { voice.notify("upload"); return; }
+    if (idx < 2) go(2);
+  };
 
   return (
     <div className="viewport">
@@ -154,7 +160,7 @@ export default function Onboarding() {
               {frame.pills && !live && (
                 <div className="pills">
                   {frame.pills.map((p) => (
-                    <button key={p.label} className={`pill${p.primary ? " primary" : ""}`} onClick={() => go(idx + 1)}>{p.label}</button>
+                    <button key={p.label} className={`pill${p.primary ? " primary" : ""}`} onClick={() => (voice.phase === "live" ? voice.notify("pill") : go(idx + 1))}>{p.label}</button>
                   ))}
                 </div>
               )}
@@ -230,7 +236,7 @@ export default function Onboarding() {
         <div className="foot">
           {frame.goLive ? (
             <div className="golive">
-              <button className={`golive-btn${live ? " done" : ""}`} onClick={() => setLive(true)}>
+              <button className={`golive-btn${live ? " done" : ""}`} onClick={() => { if (voice.phase === "live") voice.notify("operator"); setLive(true); }}>
                 {live ? `Live — shoppers can find ${SHOP_NAME}` : `Go live — shoppers can find ${SHOP_NAME}`}
               </button>
               <div className="golive-note">{CATALOGUE_COUNT} products · readable by the shopping agent</div>

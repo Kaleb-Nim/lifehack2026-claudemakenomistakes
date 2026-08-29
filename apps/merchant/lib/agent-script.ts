@@ -22,7 +22,7 @@ export type ToolName =
   | "go_live";
 
 /** What causes the beat runner to advance past this beat. */
-export type AdvanceOn = "speech_stopped" | "pill" | "operator" | "audio_done";
+export type AdvanceOn = "speech_stopped" | "upload" | "pill" | "operator" | "audio_done";
 
 /** OpenAI Realtime `session.tools` entry — see 02-RESEARCH.md "Tools (SCRIPT-03)". */
 export interface RealtimeFunctionTool {
@@ -43,15 +43,16 @@ export interface BeatToolCall {
 export interface Beat {
   /** Aligned 1:1 with Frame["key"] so the runner can zip beats to frames by key, not index. */
   key: string;
-  /**
-   * Retained only for 02-01/02-02 Task 1's single wired beat; unused for speech since the
-   * context-bias switch (the model now improvises within lib/agent-context.md). Dropped from
-   * this type entirely in 02-02 Task 3, once the full beat table replaces it with `ownerCue`.
-   */
-  line: string;
-  /** The owner's expected next turn, shown on the operator teleprompter (plan 02-03). */
-  ownerCue?: string;
   advanceOn: AdvanceOn;
+  /**
+   * Minimum time (ms) this beat must stay current before it can advance, even once its
+   * `advanceOn` condition is already satisfied — e.g. letting beat C's four Context cards
+   * finish their reading ladder (clearing at 4.0/5.5/7.0/8.5 s) before the frame moves.
+   * Omitted (or 0) means no minimum.
+   */
+  minDwellMs?: number;
+  /** The owner's expected next line or action, shown on the operator teleprompter (plan 02-03). */
+  ownerCue: string;
   tools: BeatToolCall[];
 }
 
@@ -114,36 +115,122 @@ export const TOOLS: RealtimeFunctionTool[] = [
   },
 ];
 
-// ── Tool handlers — only lock_fact is implemented in this plan; the rest throw a ─
-// ── clearly labelled not-yet-implemented error that plan 02-03 replaces with real ─
-// ── canned results mapped onto lib/merchant-data.ts values. ─────────────────────
-const notImplemented = (name: ToolName) => (): CannedResult => {
-  throw new Error(`TOOL_HANDLERS.${name} is not implemented until plan 02-03`);
-};
+// ── Tool handlers — only lock_fact carries a real summary; the other six are ─
+// ── benign canned stubs (`ok: true`, no real side effect) that plan 02-03 ─
+// ── replaces with real payloads mapped onto lib/merchant-data.ts values. ─────
+// Stubbing rather than throwing is deliberate (02-02 Task 3 deviation — see the plan
+// SUMMARY): CannedResult's own contract is "`ok: false` never advances a beat", and every
+// beat in BEATS now uses all seven tools to gate a real on-camera frame advance. A thrown
+// not-yet-implemented error would silently strand the take on whichever beat first calls
+// an unimplemented tool — worse than the placeholder it was guarding against.
+const stub = (name: ToolName) => (): CannedResult => ({ ok: true, summary: `${name} (canned stub — real payload lands in plan 02-03)` });
 
 export const TOOL_HANDLERS: Record<ToolName, (args: Record<string, unknown>) => CannedResult> = {
   lock_fact: (args) => ({ ok: true, summary: typeof args.fact === "string" ? args.fact : undefined }),
-  read_source: notImplemented("read_source"),
-  search_web: notImplemented("search_web"),
-  flag_conflict: notImplemented("flag_conflict"),
-  resolve_flag: notImplemented("resolve_flag"),
-  ask_pill: notImplemented("ask_pill"),
-  go_live: notImplemented("go_live"),
+  read_source: stub("read_source"),
+  search_web: stub("search_web"),
+  flag_conflict: stub("flag_conflict"),
+  resolve_flag: stub("resolve_flag"),
+  ask_pill: stub("ask_pill"),
+  go_live: stub("go_live"),
 };
 
-// ── The beats — only A and B in this plan; 02-02 fills in C through G ───────
+// ── Tiny factory idiom, matching lib/merchant-data.ts's ok()/q()/flag()/struck() ────
+const tool = (name: ToolName, args: Record<string, unknown>, atMs?: number): BeatToolCall =>
+  (atMs === undefined ? { name, args } : { name, args, atMs });
+
+// ── The beats, A → G, zipped to FRAMES by key ────────────────────────────────
+// Each beat's `tools` fire once, at the moment its own advanceOn condition is met — i.e.
+// they produce whatever becomes newly visible on the frame being entered next. The screen
+// itself never reads these; frame.log/frame.cards (lib/merchant-data.ts) are what render.
+// Firing is what plan 02-03's real handlers will gate a take's progress on.
 export const BEATS: Beat[] = [
   {
     key: "A",
-    line: FRAMES[0].agentLine,
     advanceOn: "speech_stopped",
-    tools: [{ name: "lock_fact", args: { fact: "Shop: Bizgram Asia · Sim Lim Square #05-50" } }],
+    ownerCue: FRAMES[1].caption ?? "",
+    tools: [
+      tool("lock_fact", { fact: "Shop: Bizgram Asia · Sim Lim Square #05-50" }),
+      tool("lock_fact", { fact: "Sells: laptops + components (HDD, GPU, servers)" }),
+      tool("lock_fact", { fact: "Scope for agent: laptops first (owner's words)" }),
+    ],
   },
   {
     key: "B",
-    line: FRAMES[1].agentLine,
+    advanceOn: "upload",
+    ownerCue: "Drop the price-list PDF, the Acer promo sheet, the three shelf photos, and paste the website URL.",
+    tools: [
+      tool("search_web", { query: "bizgram.com" }),
+      tool("read_source", { source: "001 Bizgram Asia Pricelist August 29, 2026.pdf" }),
+      tool("read_source", { source: "ACER-LAPTOP-OFFER-PROMO-SINGAPORE.pdf" }),
+      tool("read_source", { source: "3 photos" }),
+      tool("flag_conflict", { conflict: "Swift Go 14: flyer $1,349 (expired) vs price list $1,299 vs shelf $1,299" }),
+      tool("flag_conflict", { conflict: "Price list says \"cash or PayNow\" — card price unknown" }),
+      tool("flag_conflict", { conflict: "1,100+ component SKUs found — include or not?" }),
+    ],
+  },
+  {
+    key: "C",
+    advanceOn: "audio_done",
+    // 9000 > 8500, the last of the four Context-card clear delays (lib/frame-timing.ts) —
+    // the frame must not move until the reading ladder has finished, whatever the agent's
+    // own audio does.
+    minDwellMs: 9000,
+    ownerCue: "Stay quiet and let me finish reading — I'll flag anything I'm not sure about.",
+    tools: [
+      tool("resolve_flag", { conflict: "Swift Go 14: flyer $1,349 (expired) vs price list $1,299 vs shelf $1,299", resolution: "Swift Go 14 = $1,299 cash/PayNow · $1,349 card" }),
+      tool("resolve_flag", { conflict: "Price list says \"cash or PayNow\" — card price unknown", resolution: "Card surcharge: +$50 on laptops" }),
+      tool("resolve_flag", { conflict: "1,100+ component SKUs found — include or not?", resolution: "Scope: laptops + accessories (components excluded for now)" }),
+      tool("lock_fact", { fact: "Source priority: price list > shelf tag > flyer (specs only) > website (names only)" }),
+    ],
+  },
+  {
+    key: "D",
     advanceOn: "speech_stopped",
-    tools: [],
+    ownerCue: FRAMES[3].caption ?? "",
+    tools: [
+      tool("lock_fact", { fact: "Warranty: 2-yr carry-in via shop · 7-day DOA exchange" }),
+      tool("lock_fact", { fact: "Services: SSD/RAM upgrades in shop, same day, free install w/ purchase" }),
+      tool("lock_fact", { fact: "Warehouse → shop: same day before 3pm, else next morning" }),
+    ],
+  },
+  {
+    key: "E",
+    advanceOn: "speech_stopped",
+    ownerCue: FRAMES[4].caption ?? "",
+    tools: [
+      tool("lock_fact", { fact: "Aspire Go 15 = display set, last unit, full warranty, no box" }),
+      tool("ask_pill", {
+        question: "If a shopper wants something cheaper than what you stock, show only your products, or the closest match with an explanation?",
+        options: ["Only my products", "Closest match + explain"],
+      }),
+    ],
+  },
+  {
+    key: "F",
+    advanceOn: "pill",
+    ownerCue: "Tap a pill — \"Only my products\" or \"Closest match + explain\".",
+    tools: [
+      tool("lock_fact", { fact: "Below-budget: show closest match + explain" }),
+      tool("ask_pill", {
+        question: "When a shopper wants to buy, pay in the chat and collect at #05-50, or send them to WhatsApp first?",
+        options: ["Pay in chat, collect at #05-50", "WhatsApp me first"],
+      }),
+    ],
+  },
+  {
+    key: "F2",
+    advanceOn: "pill",
+    ownerCue: "Tap a pill — \"Pay in chat, collect at #05-50\" or \"WhatsApp me first\".",
+    tools: [
+      tool("lock_fact", { fact: "Checkout: pay in chat (Visa, card price) → collect at #05-50 · PayNow option kept" }),
+    ],
+  },
+  {
+    key: "G",
+    advanceOn: "operator",
+    ownerCue: "— end of script —",
+    tools: [tool("go_live", {})],
   },
 ];
 

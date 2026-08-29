@@ -1,22 +1,24 @@
 "use client";
 
 // Joins hooks/useRealtimeSession.ts (transport) to lib/agent-script.ts (beat table) so a
-// live Realtime session replies to the owner's own turns, fires each beat's canned tool
-// handlers on the owner's real speech, and uses the handler's return value — never a
-// timer — to advance the onboarding page a frame (CONTEXT.md: "Snapshot-first, not a
-// reducer rewrite").
+// live Realtime session replies to the owner's own turns, walks the eight beats A → G, and
+// fires each beat's canned tool calls — never a timer — the moment its own `advanceOn`
+// condition is satisfied, then advances the onboarding page a frame (CONTEXT.md:
+// "Snapshot-first, not a reducer rewrite").
 //
 // The agent's WORDS are no longer decided here — the session config sent at mint time (the
 // contents of lib/agent-context.md, read server-side per mint) carries the whole context
-// bias, and the model answers freely inside it. This module's only job is turn-taking: open
-// the conversation once the session goes live, then answer again on every qualified owner
-// turn — never more than one response in flight at once — while a separate, independent
-// threshold decides whether that same turn is also long enough to move the take to the next
-// frame. See 02-02-PLAN.md Task 2 for the full guard rationale.
+// bias, and the model answers freely inside it. This module's only job is the screen: open
+// the conversation once the session goes live, answer again on every qualified owner turn
+// (never more than one response in flight at once), and walk the beat cursor on whichever
+// signal each beat is waiting for — speech, an upload landing, a pill tap, an operator
+// action, or the agent's own audio finishing — while a beat whose condition is not speech
+// ignores speech events for advancing entirely (the owner can talk through it and still
+// only ever get a reply, never an early cut). See 02-02-PLAN.md Tasks 2 and 3.
 
-import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useRealtimeSession, type RealtimeEvent, type SessionFailure, type SessionPhase } from "../hooks/useRealtimeSession";
-import { AUDIO_TIMEOUT_MS, BEATS, ECHO_GRACE_MS, MIN_REPLY_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, type Beat } from "./agent-script";
+import { AUDIO_TIMEOUT_MS, BEATS, ECHO_GRACE_MS, MIN_REPLY_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, beatIndexOf, type AdvanceOn, type Beat } from "./agent-script";
 
 /** The slice of useOnboardingState() the runner needs — kept structural, not imported, to avoid coupling this module to the hook's full surface. */
 export interface BeatRunnerOnboarding {
@@ -24,6 +26,14 @@ export interface BeatRunnerOnboarding {
   frame: { key: string };
   go: (next: number) => void;
 }
+
+/**
+ * Advance signals the surrounding page reports explicitly — an upload landing, a pill tap,
+ * or an operator action like Go live. The other two `AdvanceOn` values (`speech_stopped`,
+ * `audio_done`) are never reported this way; the runner detects both itself from Realtime
+ * session events.
+ */
+export type ExternalAdvanceSignal = Extract<AdvanceOn, "upload" | "pill" | "operator">;
 
 export interface BeatRunnerApi {
   phase: SessionPhase;
@@ -38,6 +48,16 @@ export interface BeatRunnerApi {
    * started; it no-ops rather than throwing.
    */
   repeat: () => void;
+  /**
+   * Reports a non-speech advance signal to the current beat. A no-op if the current beat
+   * isn't waiting on that particular signal (e.g. a pill tap while the take is still on
+   * beat A) — callers never need to check `advanceOn` themselves before calling this.
+   */
+  notify: (signal: ExternalAdvanceSignal) => void;
+  /** 1-indexed position of the current beat within BEATS, for the operator teleprompter (plan 02-03). 0 before any beat has been entered. */
+  beatNumber: number;
+  /** Total beat count (BEATS.length). */
+  beatTotal: number;
 }
 
 /**
@@ -47,8 +67,13 @@ export interface BeatRunnerApi {
  * `.phase` as an unsafe render-time ref access.
  */
 export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObject<HTMLAudioElement | null>): BeatRunnerApi {
+  const [beatIndex, setBeatIndex] = useState(-1);
   const currentBeatRef = useRef<Beat | null>(null);
-  const firedToolsRef = useRef<Set<string>>(new Set());
+  /** When the current beat became current — the clock a `minDwellMs` is measured against. */
+  const beatEnteredAtRef = useRef(0);
+  /** Beats already advanced past — a beat's tools fire, and it moves the cursor, exactly once. */
+  const advancedBeatsRef = useRef<Set<string>>(new Set());
+  const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechStartedAtRef = useRef<number | null>(null);
   const audioArrivedRef = useRef(false);
   /** True while the agent's own audio is playing out of the speakers. */
@@ -75,8 +100,6 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   const connectRef = useRef<() => void>(() => {});
 
   const fireTools = useCallback((beat: Beat): boolean => {
-    if (firedToolsRef.current.has(beat.key)) return false; // already fired — never fire twice
-    firedToolsRef.current.add(beat.key);
     let allOk = true;
     for (const call of beat.tools) {
       try {
@@ -87,6 +110,12 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       }
     }
     return allOk;
+  }, []);
+
+  const enterBeat = useCallback((beat: Beat) => {
+    currentBeatRef.current = beat;
+    beatEnteredAtRef.current = Date.now();
+    setBeatIndex(beatIndexOf(beat.key));
   }, []);
 
   /**
@@ -103,6 +132,46 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       if (!audioArrivedRef.current) disconnectRef.current("dropped");
     }, AUDIO_TIMEOUT_MS);
   }, []);
+
+  // `advance` schedules itself for a beat's remaining dwell (see below) — a ref mirror, kept
+  // current by a no-dependency effect (same idiom as sendRef/disconnectRef above), is what
+  // that self-schedule calls, rather than the `const` closing over itself directly.
+  const advanceRef = useRef<(beat: Beat) => void>(() => {});
+
+  /**
+   * The only place a beat is left. Fires its tools, moves the onboarding frame forward, and
+   * advances the cursor to the next beat in BEATS (if any) — never twice for the same beat.
+   * A `minDwellMs` holds this off rather than dropping it: the condition stays satisfied, so
+   * this re-checks itself once the remaining dwell has elapsed.
+   */
+  const advance = useCallback((beat: Beat) => {
+    if (advancedBeatsRef.current.has(beat.key)) return;
+    const dwell = beat.minDwellMs ?? 0;
+    const elapsed = Date.now() - beatEnteredAtRef.current;
+    if (elapsed < dwell) {
+      if (dwellTimerRef.current) clearTimeout(dwellTimerRef.current);
+      dwellTimerRef.current = setTimeout(() => advanceRef.current(beat), dwell - elapsed);
+      return;
+    }
+    advancedBeatsRef.current.add(beat.key);
+    setTimeout(() => {
+      fireTools(beat);
+      const { go, idx } = onboardingRef.current;
+      go(idx + 1);
+      const nextBeat = BEATS[beatIndexOf(beat.key) + 1];
+      if (nextBeat) enterBeat(nextBeat);
+    }, SETTLE_MS);
+  }, [fireTools, enterBeat]);
+
+  useEffect(() => {
+    advanceRef.current = advance;
+  });
+
+  const notify = useCallback((signal: ExternalAdvanceSignal) => {
+    const beat = currentBeatRef.current;
+    if (!beat || beat.advanceOn !== signal) return;
+    advance(beat);
+  }, [advance]);
 
   const handleEvent = useCallback((event: RealtimeEvent) => {
     if (event.type === "response.created") {
@@ -124,6 +193,13 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       // Any speech window still open here began under the agent's own voice — discard it
       // rather than letting it be measured as an owner turn.
       speechStartedAtRef.current = null;
+
+      // Beat C's own signal: the agent's audio finishing (never `.cleared`, which is an
+      // interruption — not applicable here since barge-in is gated off).
+      if (event.type === "output_audio_buffer.stopped") {
+        const beat = currentBeatRef.current;
+        if (beat && beat.advanceOn === "audio_done") advance(beat);
+      }
     }
 
     if (event.type === "input_audio_buffer.speech_started") {
@@ -150,19 +226,17 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
       if (spokenMs < MIN_REPLY_MS) return; // a cough or an "mm" — no reply, no advance
 
       // Replying and advancing are separate questions. Every qualifying turn gets a
-      // response; only a turn past MIN_SPEECH_MS also moves the take.
+      // response; only a turn past MIN_SPEECH_MS on a beat that is itself waiting on speech
+      // also moves the take — a beat waiting on an upload, a pill, an operator action, or
+      // the agent's own audio ignores speech for advancing entirely, on any length of turn.
       sendResponseCreate();
       if (spokenMs < MIN_SPEECH_MS) return; // answered, but too short to advance the frame
 
       const beat = currentBeatRef.current;
       if (!beat || beat.advanceOn !== "speech_stopped") return;
-
-      const { go, idx } = onboardingRef.current;
-      setTimeout(() => {
-        if (fireTools(beat)) go(idx + 1);
-      }, SETTLE_MS);
+      advance(beat);
     }
-  }, [fireTools, sendResponseCreate]);
+  }, [advance, sendResponseCreate]);
 
   const session = useRealtimeSession(audioRef, { onEvent: handleEvent });
 
@@ -178,13 +252,14 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   // what does the talking.
   useEffect(() => {
     if (session.phase === "live" && currentBeatRef.current === null) {
-      currentBeatRef.current = BEATS[0];
+      enterBeat(BEATS[0]);
       sendResponseCreate();
     }
-  }, [session.phase, sendResponseCreate]);
+  }, [session.phase, enterBeat, sendResponseCreate]);
 
   useEffect(() => () => {
     if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
+    if (dwellTimerRef.current) clearTimeout(dwellTimerRef.current);
   }, []);
 
   const repeat = useCallback(() => {
@@ -202,5 +277,8 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     hearing: session.hearing,
     connect: session.connect,
     repeat,
+    notify,
+    beatNumber: beatIndex + 1,
+    beatTotal: BEATS.length,
   };
 }
