@@ -31,7 +31,7 @@ The video must visibly show: the merchant uploads *anything* with zero effort �
 - Real Visa APIs — statement says simulated; on the merchant side Visa appears (if at all) as a simulated payout-setup step before Go live
 - Auth, tests, CI, dashboards, analytics, orders list — no dashboard vocabulary (brief §6); 24 h budget
 - Phone layout / dark mode — desktop 16:9 video only (brief §7)
-- Anything real before the demo video exists — team decision
+- Real *extraction*, web fetch and the Neo4j write before the video is recorded — team decision. (Real **voice** and real **uploads** are in the video build; it is the agent's brain that stays canned until Phase 5.)
 
 ## Context
 
@@ -76,7 +76,7 @@ Node/relationship names above are the proposed contract — agree them with the 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Hardcode the whole demo first, real build last | Team huddle after mentor; DevPost video wins | ✓ Good (Phase 1 shipped in hours) |
+| Hardcode the demo first; real build after the video | Team huddle after mentor; DevPost video wins | ✓ Good (Phase 1 shipped in hours) — refined: voice and uploads are real from Phase 2–3, only the brain stays canned |
 | GSD scope = merchant page only; bot is a separate developer's project | Two pairs, two codebases, one shared graph | — Pending |
 | Neo4j as the centralised product store the bot reads | Category-trained fields are relationships (fits / upgradeable / stocked-at) — a graph, not rows; single source for both halves | — Pending |
 | OpenAI GPT Realtime API for the voice agent, **from the demo onward** | Real listening and speaking is the novelty on camera; speech-to-speech with tool calls | — Pending |
