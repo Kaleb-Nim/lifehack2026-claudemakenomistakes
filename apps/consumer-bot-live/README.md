@@ -37,6 +37,29 @@ yvcwzialpcdcrctxacpc` from a directory with `supabase init` run, or paste
 supabase db push
 ```
 
+## Load the ParadeDB catalogue
+
+`scripts/ingest_sg_catalog.py` takes a bounded snapshot of public, currently
+available electronics from Dynacore Technologies and Mansa Computers. It
+normalizes Shopify products into one row per product, preserves available
+variants in JSONB, and upserts on `(merchant_slug, source_product_id)`.
+
+Preview the selected products without touching the database:
+
+```sh
+python scripts/ingest_sg_catalog.py --dry-run --per-merchant 100
+```
+
+Load them after setting `CATALOG_DATABASE_URL`:
+
+```sh
+python scripts/ingest_sg_catalog.py --per-merchant 100
+```
+
+The importer applies `schema/catalog.sql`, requires `pg_search >= 0.25.0`,
+and creates a current-syntax `USING paradedb` index. It aborts before writing
+if an existing `public.catalog_products` table has an incompatible shape.
+
 ## Verify
 
 ```sh
