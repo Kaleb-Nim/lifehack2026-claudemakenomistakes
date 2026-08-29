@@ -123,7 +123,8 @@ describe("POST /api/upload — pdf/image/website happy paths", () => {
     expect(source.kind).toBe("pdf");
     expect(source.name).toBe("Pricelist August 2026.pdf");
     expect(source.pageCount).toBe(1);
-    expect(source.thumbUrl).toMatch(/^data:image\/svg\+xml;base64,/);
+    // Real raster render of page 1 (PNG), not the SVG fallback card.
+    expect(source.thumbUrl).toMatch(/^data:image\/png;base64,/);
     expect(typeof source.id).toBe("string");
   });
 

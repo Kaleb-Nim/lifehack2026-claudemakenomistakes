@@ -9,6 +9,7 @@
       "name": "merchant",
       "version": "0.1.0",
       "dependencies": {
+        "@napi-rs/canvas": "^1.0.8",
         "next": "16.2.4",
         "pdfjs-dist": "^6.2.108",
         "react": "19.2.4",

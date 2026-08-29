@@ -203,16 +203,20 @@ if the tool handler needs the lookup server-side instead.
    — the mapping decision is UI-only and can be made independently of everything built in this
    phase.
 
-3. **PDF thumbnails are not rasterized pixels.** `pdfjs-dist`'s optional peer for actual canvas
-   rendering is `@napi-rs/canvas` (a native module) — adding it would be a second dependency line,
-   which this phase's brief explicitly restricts to one (`pdfjs-dist`). `lib/thumbnails.ts` instead
-   uses pdfjs-dist for genuine parsing — real page count, real page-1 dimensions, real extracted
-   text — and renders that into a small SVG "document" thumbnail (white page, folded corner, first
-   few lines of real text). It is not a picture of the PDF page, but it is derived from the PDF's
-   actual first-page content. If a true raster thumbnail becomes a hard requirement later, adding
-   `@napi-rs/canvas` and calling `page.render({ canvasContext, viewport })` is a contained change
-   inside `pdfFirstPageThumbnail` — the function's signature and return shape (`{ thumbUrl,
-   pageCount }`) would not need to change.
+3. **PDF thumbnails ARE real rasterized pixels.** (Resolved — this was briefly built as an SVG
+   stand-in to respect a one-line dependency budget, then corrected: these thumbnails are on
+   camera in Phase 4, so a stand-in was the wrong trade.) `@napi-rs/canvas` was added and
+   `pdfFirstPageThumbnail()` now renders page 1 through `page.render({ canvas, canvasContext,
+   viewport })` at 2x (440 px wide) and returns a PNG `data:` URI. Verified against a real
+   4-page PDF: correct page count, 440x330 RGBA PNG, visually accurate. The SVG document card
+   survives only as a fallback if rasterization throws, so a corrupt file degrades instead of
+   breaking the row. `standardFontDataUrl` is wired to `node_modules/pdfjs-dist/standard_fonts/`
+   — without it pdfjs drops text for non-embedded fonts.
+
+   One consequence for the wiring: a rendered page PNG runs ~150-200 KB of base64. Storing many
+   of those inline in `uploads/index.json` will bloat it. If that bites, write the PNG to
+   `uploads/<id>/thumb.png` and put a URL in `thumbUrl` instead — the field is already a plain
+   string, so nothing downstream changes.
 
 4. **Image "thumbnails" are the original image, not resized.** No image-processing dependency was
    added (same one-dependency-line constraint). `imageThumbnail()` embeds the original bytes as a

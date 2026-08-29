@@ -3,18 +3,20 @@
 //
 // pdf.js worker setup lives entirely in this file so importing it elsewhere (a route handler,
 // later a tool handler) is a one-line `import`. We use pdfjs-dist's "legacy" Node build and only
-// its text/metadata APIs (getDocument, getViewport, getTextContent) — never `page.render()`.
-// Rendering pixels would need a canvas implementation (pdfjs-dist's optional peer is
-// `@napi-rs/canvas`, a native module), and the phase's dependency budget is "pdfjs-dist, one
-// line" — see 03-INTEGRATION.md for why this is called out as a deliberate trade-off rather than
-// an oversight. Instead we render a small SVG "document" thumbnail sized to the PDF's real first
-// page aspect ratio and captioned with the real extracted text from that page, so the thumbnail
-// is genuinely derived from the file's content, just not a pixel-for-pixel raster of it.
+// its APIs plus @napi-rs/canvas to rasterize page 1 to a real PNG. These thumbnails are on
+// camera during the phase 4 recording, so a pixel-accurate render matters; the SVG document
+// card below survives only as a fallback for files that fail to rasterize.
 //
 // pdfjs-dist's Node build has no worker process to spin up (GlobalWorkerOptions.workerSrc is left
 // unset on purpose) — everything runs on the calling thread, which is fine for a single ~4s read.
 
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import { createCanvas } from "@napi-rs/canvas";
+import path from "node:path";
+
+// pdfjs ships the 14 standard Type1 fonts it substitutes for non-embedded fonts. Without this
+// path it logs "Ensure that the `standardFontDataUrl` API parameter is provided" and drops text.
+const STANDARD_FONT_DATA_URL = path.join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts/");
 
 export interface PdfThumbnailResult {
   thumbUrl: string;
@@ -76,41 +78,58 @@ function renderDocumentSvg(pageWidth: number, pageHeight: number, lines: string[
 }
 
 /**
- * Reads the real first page of a PDF (page count, dimensions, extracted text) via pdfjs-dist and
- * renders that content into a small SVG thumbnail. Never rasterizes pixels — see file header.
+ * Rasterizes the real first page of a PDF to a PNG data URI via pdfjs-dist + @napi-rs/canvas.
+ * These thumbnails appear on camera during the phase 4 recording, so this is a genuine
+ * pixel render of the page, not a stand-in. Falls back to the SVG document card only if
+ * rasterization itself fails, so a bad file never breaks the upload row.
  */
 export async function pdfFirstPageThumbnail(buffer: Buffer): Promise<PdfThumbnailResult> {
   const data = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   const loadingTask = pdfjsLib.getDocument({
     data,
-    disableFontFace: true,
-    useSystemFonts: false,
+    standardFontDataUrl: STANDARD_FONT_DATA_URL,
   });
 
   const doc = await loadingTask.promise;
   try {
     const pageCount = doc.numPages;
     const page = await doc.getPage(1);
-    const viewport = page.getViewport({ scale: 1 });
+    const base = page.getViewport({ scale: 1 });
 
-    let lines: string[] = [];
     try {
-      const textContent = await page.getTextContent();
-      const flat = textContent.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-      lines = chunkIntoLines(flat, WORDS_PER_LINE, MAX_TEXT_LINES);
-    } catch {
-      // Text extraction can fail on scanned/image-only PDFs — thumbnail still renders, just blank.
-      lines = [];
-    }
+      // 2x so the thumbnail stays crisp when the recording is scaled up to 1080p.
+      const viewport = page.getViewport({ scale: (THUMB_WIDTH * 2) / base.width });
+      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+      const ctx = canvas.getContext("2d");
+      // PDFs assume paper: without this, transparent areas render black.
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    return { thumbUrl: renderDocumentSvg(viewport.width, viewport.height, lines), pageCount };
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        canvasContext: ctx as unknown as CanvasRenderingContext2D,
+        viewport,
+      }).promise;
+
+      const thumbUrl = `data:image/png;base64,${canvas.toBuffer("image/png").toString("base64")}`;
+      return { thumbUrl, pageCount };
+    } catch {
+      // Rasterization failed (corrupt page, unsupported filter) — degrade to the text card.
+      let lines: string[] = [];
+      try {
+        const textContent = await page.getTextContent();
+        const flat = textContent.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        lines = chunkIntoLines(flat, WORDS_PER_LINE, MAX_TEXT_LINES);
+      } catch {
+        lines = [];
+      }
+      return { thumbUrl: renderDocumentSvg(base.width, base.height, lines), pageCount };
+    }
   } finally {
-    // PDFDocumentProxy has no public destroy() — the loading task owns teardown of the worker
-    // transport it created.
     await loadingTask.destroy();
   }
 }
