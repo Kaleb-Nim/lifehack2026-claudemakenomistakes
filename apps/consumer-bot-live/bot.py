@@ -16,6 +16,7 @@ import html
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -41,6 +42,8 @@ from telegram.ext import (
 from agent import core
 from db import catalog_db, orders_db
 from tools import buy_and_pay
+
+ENV_PATH = Path(__file__).resolve().parent / ".env"
 
 load_dotenv()
 
@@ -126,6 +129,21 @@ async def _send_product_cards(message, products: list[dict[str, Any]]) -> None:
 
 
 def mini_app_url() -> str:
+    """Read the tunnel URL at send time, not at import.
+
+    `mini_app/tunnel_watchdog.py` rewrites MINI_APP_URL in .env whenever the
+    public tunnel rotates, which happens often. Reading os.environ alone would
+    pin whatever was set when the process started, so every rotation would
+    hand shoppers a button pointing at a dead tunnel until someone restarted
+    the bot.
+    """
+    try:
+        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == "MINI_APP_URL":
+                return value.strip().strip("\"'")
+    except OSError:
+        pass
     return os.environ.get("MINI_APP_URL", "").strip()
 
 

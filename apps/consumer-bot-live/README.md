@@ -103,3 +103,12 @@ python mini_app/tunnel_watchdog.py
 Without `MINI_APP_URL` the bot still creates orders, but says checkout is
 unavailable instead of launching it. See `AGENTS.md` for the settlement
 security checks.
+
+The watchdog rewrites `MINI_APP_URL` in `.env` whenever the tunnel rotates, and
+the bot re-reads it when building each button, so a rotation does **not**
+require a restart.
+
+**Biometrics need Telegram mobile.** `BiometricManager` requires an iOS or
+Android client on Telegram 7.2+. On Desktop or Web the Mini App loads and says
+biometric authentication is unsupported, so no payment can complete — demo the
+checkout from a phone.
