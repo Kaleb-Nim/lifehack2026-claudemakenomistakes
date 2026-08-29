@@ -110,3 +110,20 @@ def list_orders_for_user(
         .execute()
     )
     return response.data or []
+
+
+def set_cancellation_reason(order_id: str, reason: str) -> dict[str, Any]:
+    """Record why a cancellation was requested, without cancelling yet.
+
+    The shopper still has to authorise in the Mini App. Persisting the reason
+    here rather than holding it in memory means the confirmation still works
+    if the bot restarts mid-flow.
+    """
+    response = (
+        get_client()
+        .table("orders")
+        .update({"cancellation_reason": reason})
+        .eq("id", order_id)
+        .execute()
+    )
+    return response.data[0]

@@ -71,6 +71,15 @@ The payment leg cannot live in the agent loop: a Telegram Web App only opens
 from a keyboard button, and its result arrives as a separate `web_app_data`
 message rather than a tool return value. So the flow is split:
 
+`_mini_app_keyboard()` builds the launch button for both actions; `PAY_ACTION`
+and `CANCEL_ACTION` differ only in the `action` parameter, and the Mini App
+already retitles itself for cancellation.
+
+`bot.py` holds a `typing…` indicator for the whole turn via `_keep_typing`.
+Telegram expires it after about five seconds and a turn can take far longer, so
+it is re-sent on a timer rather than set once, and cancelled in a `finally` so
+a failed turn cannot leave it running.
+
 1. The model calls `buy_and_pay` once the shopper picks a product. No in-chat
    confirmation step — see the note above.
 2. `buy_and_pay` creates a `pending` order. `telegram_user_id`/
@@ -108,6 +117,12 @@ someone else's order id could read their purchase or cancel it.
 - `cancel_order` refuses anything not `pending`/`held` (a paid order needs a
   refund, which does not exist yet) and is idempotent on an already-cancelled
   order.
+- **Cancelling requires a passkey, like paying.** `cancel_order` does not
+  cancel: it records the reason and hands off to the Mini App with
+  `action=cancel:confirm`, and only `_settle_cancellation` in `bot.py` flips
+  the status. The reason is written to the row up front, so the confirmation
+  still works if the bot restarts between asking and confirming. Cancelling is
+  destructive, so it must not complete on the model's say-so.
 
 ## How results are shown
 

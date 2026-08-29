@@ -12,6 +12,7 @@ as a tool return value.
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
@@ -30,6 +31,7 @@ from telegram import (
     Update,
     WebAppInfo,
 )
+from telegram.constants import ChatAction
 from telegram.error import TelegramError
 from telegram.ext import (
     Application,
@@ -54,7 +56,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 PAY_ACTION = "visa:confirm"
+CANCEL_ACTION = "cancel:confirm"
 BUY_CALLBACK_PREFIX = "buy:"
+
+# Telegram clears the typing indicator after about five seconds, so a slow turn
+# needs it re-sent. Refresh comfortably inside that window.
+TYPING_REFRESH_SECONDS = 4.0
 
 # Telegram truncates captions at 1024 characters, but the point of cards is
 # brevity: a card longer than this is the wall of text we are replacing.
@@ -161,6 +168,43 @@ async def _send_product_cards(message, products: list[dict[str, Any]]) -> None:
         await message.reply_text(caption, parse_mode="HTML", reply_markup=keyboard)
 
 
+def _payment_keyboard(payment: dict[str, Any]) -> ReplyKeyboardMarkup | None:
+    return _mini_app_keyboard(
+        action=PAY_ACTION,
+        order_id=payment["order_id"],
+        product_name=payment["product_name"],
+        label=f"Pay {payment['amount_display']}",
+    )
+
+
+def _cancellation_keyboard(cancellation: dict[str, Any]) -> ReplyKeyboardMarkup | None:
+    return _mini_app_keyboard(
+        action=CANCEL_ACTION,
+        order_id=cancellation["order_id"],
+        product_name=cancellation["product_name"],
+        label=f"Confirm cancellation · {cancellation['amount_display']}",
+    )
+
+
+async def _keep_typing(bot, chat_id: int, stop: asyncio.Event) -> None:
+    """Hold the 'typing…' indicator until the turn finishes.
+
+    A turn can take many seconds - an LLM call, an embedding, then catalogue
+    and Supabase queries - and Telegram expires the indicator after about five,
+    so it has to be re-sent rather than set once.
+    """
+    while not stop.is_set():
+        try:
+            await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        except TelegramError:
+            # Losing the indicator must never take down the reply itself.
+            return
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=TYPING_REFRESH_SECONDS)
+        except asyncio.TimeoutError:
+            continue
+
+
 def mini_app_url() -> str:
     """Read the tunnel URL at send time, not at import.
 
@@ -180,26 +224,30 @@ def mini_app_url() -> str:
     return os.environ.get("MINI_APP_URL", "").strip()
 
 
-def _payment_keyboard(payment: dict[str, Any]) -> ReplyKeyboardMarkup | None:
-    """Build the Mini App launch button for a pending payment.
+def _mini_app_keyboard(
+    *, action: str, order_id: str, product_name: str, label: str
+) -> ReplyKeyboardMarkup | None:
+    """Build a Mini App launch button for an action needing a passkey.
+
+    Used for both paying and cancelling: each is destructive enough to deserve
+    a biometric check rather than completing on the model's say-so.
 
     Returns None when MINI_APP_URL is unset, so the bot degrades to a plain
-    text reply rather than silently dropping the purchase.
+    text reply rather than silently dropping the action.
     """
     base_url = mini_app_url()
     if not base_url:
-        logger.warning("MINI_APP_URL is not set; cannot launch the payment Mini App.")
+        logger.warning("MINI_APP_URL is not set; cannot launch the Mini App.")
         return None
 
-    label = f"Pay {payment['amount_display']}"
     parts = urlsplit(base_url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     query.update(
         {
-            "action": PAY_ACTION,
-            "order_id": payment["order_id"],
+            "action": action,
+            "order_id": order_id,
             "confirmation_label": label,
-            "product_name": payment["product_name"],
+            "product_name": product_name,
         }
     )
     url = urlunsplit(
@@ -221,6 +269,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None or message.text is None or user is None or chat is None:
         return
 
+    stop_typing = asyncio.Event()
+    typing = asyncio.create_task(_keep_typing(context.bot, chat.id, stop_typing))
     try:
         reply = await core.handle_message(
             telegram_user_id=user.id,
@@ -234,14 +284,27 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "Please try again in a moment."
         )
         return
+    finally:
+        stop_typing.set()
+        await typing
 
     payment = core.take_pending_payment(user.id, chat.id)
-    keyboard = _payment_keyboard(payment) if payment else None
-    if payment and keyboard is None:
-        reply += (
-            "\n\n(Payment cannot be started right now - the checkout app is "
-            "not configured.)"
-        )
+    cancellation = core.take_pending_cancellation(user.id, chat.id)
+    keyboard = None
+    if payment:
+        keyboard = _payment_keyboard(payment)
+        if keyboard is None:
+            reply += (
+                "\n\n(Payment cannot be started right now - the checkout app "
+                "is not configured.)"
+            )
+    elif cancellation:
+        keyboard = _cancellation_keyboard(cancellation)
+        if keyboard is None:
+            reply += (
+                "\n\n(Cancellation cannot be confirmed right now - the "
+                "checkout app is not configured.)"
+            )
     await message.reply_text(reply, reply_markup=keyboard)
 
     # Cards and lists come after the reply so the agent's framing line reads first.
@@ -294,8 +357,34 @@ async def on_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.message.reply_text(text, reply_markup=keyboard)
 
 
+async def _settle_cancellation(message, order: dict[str, Any]) -> None:
+    """Cancel an order the shopper has authorised in the Mini App."""
+    order_id = order["id"]
+    if order["status"] == "cancelled":
+        await message.reply_text(
+            "That order is already cancelled.", reply_markup=ReplyKeyboardRemove()
+        )
+        return
+    if order["status"] not in ("pending", "held"):
+        await message.reply_text(
+            f"That order is {order['status']} and can no longer be cancelled here.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+
+    # The reason was stored when the tool ran, so it survives a restart between
+    # asking and confirming.
+    cancelled = orders_db.update_order_status(order_id, "cancelled")
+    reason = cancelled.get("cancellation_reason")
+    text = f"Cancellation confirmed.\n{_short_title(cancelled['product_name'])}"
+    if reason:
+        text += f"\nReason: {reason}"
+    text += f"\nOrder {order_id}"
+    await message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+
+
 async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Settle a payment authorised inside the Mini App."""
+    """Settle a payment or a cancellation authorised inside the Mini App."""
     message = update.effective_message
     user = update.effective_user
     if message is None or user is None or message.web_app_data is None:
@@ -306,31 +395,36 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except (json.JSONDecodeError, TypeError):
         payload = {}
 
+    action = payload.get("action")
     authorized = (
         payload.get("type") == "biometric_confirmation"
         and payload.get("status") == "authorized"
-        and payload.get("action") == PAY_ACTION
+        and action in (PAY_ACTION, CANCEL_ACTION)
     )
     order_id = payload.get("order_id")
 
     if not authorized or not order_id:
         await message.reply_text(
-            "Biometric confirmation was not completed. No payment was made.",
+            "Confirmation was not completed. Nothing was changed.",
             reply_markup=ReplyKeyboardRemove(),
         )
         return
 
     order = orders_db.get_order(order_id)
-    # The Mini App payload is client-supplied, so never settle an order on its
-    # say-so alone: confirm the order exists and belongs to this Telegram user.
+    # The Mini App payload is client-supplied, so never act on its say-so
+    # alone: confirm the order exists and belongs to this Telegram user.
     if order is None or order["telegram_user_id"] != user.id:
         logger.warning(
-            "Rejected payment settlement for order %s from user %s", order_id, user.id
+            "Rejected %s for order %s from user %s", action, order_id, user.id
         )
         await message.reply_text(
-            "That payment could not be matched to one of your orders.",
+            "That could not be matched to one of your orders.",
             reply_markup=ReplyKeyboardRemove(),
         )
+        return
+
+    if action == CANCEL_ACTION:
+        await _settle_cancellation(message, order)
         return
 
     if order["status"] == "paid":

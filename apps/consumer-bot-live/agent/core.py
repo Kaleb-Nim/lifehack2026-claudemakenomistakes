@@ -138,6 +138,18 @@ def take_pending_orders(
     return _pending_orders.pop((telegram_user_id, telegram_chat_id), [])
 
 
+# Cancellations awaiting biometric confirmation. Cancelling is destructive, so
+# it is authorised the same way paying is rather than on the model's say-so.
+_pending_cancellations: dict[tuple[int, int], dict[str, Any]] = {}
+
+
+def take_pending_cancellation(
+    telegram_user_id: int, telegram_chat_id: int
+) -> dict[str, Any] | None:
+    """Pop the cancellation awaiting a Mini App confirmation."""
+    return _pending_cancellations.pop((telegram_user_id, telegram_chat_id), None)
+
+
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
@@ -197,6 +209,13 @@ async def _run_tool(
 
         if name == "buy_and_pay" and isinstance(result, dict):
             _pending_payments[conversation_key] = result
+
+        if (
+            name == "cancel_order"
+            and isinstance(result, dict)
+            and result.get("cancellation_confirmation_required")
+        ):
+            _pending_cancellations[conversation_key] = result
 
         if name == "product_discovery" and isinstance(result, list) and result:
             _pending_results[conversation_key] = result
