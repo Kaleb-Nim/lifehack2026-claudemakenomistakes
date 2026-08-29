@@ -1,76 +1,90 @@
 # Requirements: Merchant onboarding page
 
 **Defined:** 2026-08-29
-**Core Value:** The video visibly shows upload-anything → structured products → category-smart questions → Go live.
+**Core Value:** The video visibly shows upload-anything → structured products → category-smart questions → Go live — with a voice agent that really listens and really talks.
 
-Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph is the shared contract.
+Scope: `apps/merchant` only. The consumer bot is out of scope; the Neo4j graph (Phase 6) is the shared contract.
 
 ## v1 Requirements
 
-### Demo page (hardcoded)
+### Demo page (hardcoded) — Phase 1
 
-- [x] **PAGE-01**: FrameQuiet2 layout from Claude Design "Merchant Onboarding v3": header + status chip, Locked-in log, voice orb + agent line + caption + pills, Context rows, composer
-- [x] **PAGE-02**: Modernist tokens (Archivo, `#ec3013`, neutral ramp), line-SVG icons, fixed 1920×1080 stage scaled to viewport
-- [x] **PAGE-03**: States A–G render with the final copy (agent lines, owner captions, log lines, card contents, hero card, Go live)
-- [x] **PAGE-04**: Orb idle / speaking / listening; membrane only moves while someone talks
-- [x] **PAGE-05**: Log lines append ~0.6 s apart; `!` lines strike through when resolved in State D
-- [x] **PAGE-06**: Context rows `reading…` ~4 s with progress bar, then summary + monospace extract incl. `⚠`; rows open/close
-- [x] **PAGE-07**: Pills, drop-bar buttons and Go live are the only clicks and advance the flow
-- [x] **PAGE-08**: Recording controls: ←/→/Space, `?state=X`, `?auto=1`
+- [x] **PAGE-01**: FrameQuiet2 layout from Claude Design "Merchant Onboarding v3"
+- [x] **PAGE-02**: Modernist tokens, line-SVG icons, fixed 1920×1080 stage
+- [x] **PAGE-03**: States A–G with the final copy
+- [x] **PAGE-04**: Orb idle / speaking / listening
+- [x] **PAGE-05**: Log lines append ~0.6 s apart; `!` strikes through when resolved
+- [x] **PAGE-06**: Context rows `reading…` ~4 s then flip; open/close for detail
+- [x] **PAGE-07**: Pills, drop-bar buttons, Go live are the only clicks
+- [x] **PAGE-08**: ←/→/Space, `?state=X`, `?auto=1`
 
-### Recording readiness
+### Real-time voice — Phase 2
 
-- [ ] **REC-01**: One merchant script chosen (Bizgram vs Hock Seng) and `lib/merchant-data.ts` matches it verbatim
-- [ ] **REC-02**: File chips / thumbnails read as the real sources (price-list PDF page, Acer flyer, three shop photos) instead of grey placeholders
-- [ ] **REC-03**: `?auto=1` beat lengths match the shooting script; the Go live moment lands the handoff line the consumer segment picks up
-- [ ] **REC-04**: Optional simulated Visa payout-setup step between the summary and Go live, if the reconciled script keeps it
+- [ ] **VOICE-01**: `OPENAI_API_KEY` (+ optional `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_VOICE`) read server-side only; `app/api/realtime/session` route handler returns an ephemeral client secret; `.env.example` documents the keys
+- [ ] **VOICE-02**: Browser opens a WebRTC session to the Realtime API: mic → agent, agent audio → speakers; orb switches idle / listening / speaking from real session events (`input_audio_buffer.speech_started/stopped`, `response.audio.*`)
+- [ ] **VOICE-03**: Owner's speech is transcribed live (input audio transcription) into the caption bubble; agent's spoken text appears as the agent line
+- [ ] **VOICE-04**: Session config: server VAD, transcription on, tools registered, system prompt = the category-trained electronics-shop agent persona (tone from the brief: neutral, warm, brief)
+- [ ] **VOICE-05**: `?mode=scripted` or a missing key falls back to the Phase 1 keyboard demo with no errors
+- [ ] **VOICE-06**: Operator controls: mute, "skip to next beat", "repeat line", and a small on-screen beat indicator that is hidden in `?record=1`
 
-### Voice agent (real)
+### Scripted brain — Phase 2
 
-- [ ] **VOICE-01**: GPT Realtime API session from the browser (WebRTC) using an ephemeral key minted by a route handler; mic in, agent speech out
-- [ ] **VOICE-02**: Live transcript drives the caption (owner) and agent line (agent) on screen
-- [ ] **VOICE-03**: Tool calls `lock_fact` / `flag_conflict` / `resolve_flag` / `ask_pill` / `go_live` update the Locked-in log and pills exactly as the hardcoded frames do
-- [ ] **VOICE-04**: System prompt is the category-trained laptop-shop agent (asks warranty handling, upgrades, warehouse lead time, display-set condition, below-budget and checkout rules); hardcoded flow remains as fallback (`?mode=scripted`)
+- [ ] **SCRIPT-01**: `lib/agent-script.ts` holds the shooting script as beats: agent line to speak verbatim, expected owner turn (wait for VAD stop / pill tap / upload event), tool calls to emit, log lines to lock, rows to flip
+- [ ] **SCRIPT-02**: Each agent line is spoken **exactly** as written (`response.create` with instructions to say the given text verbatim; no improvisation); temperature/prompt tuned so it doesn't paraphrase
+- [ ] **SCRIPT-03**: Tools are real Realtime function tools (`read_source`, `search_web`, `lock_fact`, `flag_conflict`, `resolve_flag`, `ask_pill`, `go_live`) whose handlers return **hardcoded** results from `lib/merchant-data.ts`; the on-screen log/rows/pills are driven only by tool calls so Phase 5 can swap handlers without touching the UI
+- [ ] **SCRIPT-04**: Owner's real words never change the path: whatever they say, the beat advances on speech-stop (with a minimum-duration guard) so the recording can't derail
 
-### Ingest (real)
+### Real uploads, canned reading — Phase 3
 
-- [ ] **ING-01**: Drop/upload PDF, images, or paste a URL → route handler → LLM extraction → Context row shows real summary + extracted lines
-- [ ] **ING-02**: Extraction produces products in the `catalog.json` shape (demo script §6.5) incl. category-trained fields (`fits`, `upgradeable`, `good_for`/`not_for`, stock per location)
-- [ ] **ING-03**: Conflicts across sources (price-list vs flyer vs shelf tag) are detected and surfaced as `!` lines for the voice agent to resolve
+- [ ] **UP-01**: Drag-and-drop / file picker accepts PDF and images; a Context row appears at once with real name, size, page count (PDF) and a real thumbnail (first page via pdf.js; image thumbnail for photos, 3-up for a batch)
+- [ ] **UP-02**: Files are stored by a route handler (`uploads/` on disk for the demo; Vercel Blob later) and referenced by id so a reload keeps the rows
+- [ ] **UP-03**: Paste URL creates the website row with favicon + host; `search_web` returns the canned website extract
+- [ ] **UP-04**: Canned extract chosen by source kind + filename/host pattern with a generic fallback, so the demo files can be re-shot without renaming code
+- [ ] **UP-05**: "reading…" duration stays ~4 s per row regardless of file size
 
-### Shared graph (contract with the consumer bot)
+### Recording readiness — Phase 4
 
-- [ ] **GRAPH-01**: Neo4j schema agreed with the consumer-bot developer and written down (`docs/graph-schema.md`): Merchant, Location, Product, Source nodes; SELLS, STOCKED_AT, LOCATED_AT, FITS, UPGRADEABLE, SOURCED_FROM
-- [ ] **GRAPH-02**: Go live writes the merchant + products + relationships to Neo4j idempotently (MERGE on ids)
-- [ ] **GRAPH-03**: A seed script loads Bizgram's 11 products (and a second merchant stub) so the bot has data before real ingest works
+- [ ] **REC-01**: One merchant script chosen (Bizgram vs Hock Seng); script + data files match it verbatim
+- [ ] **REC-02**: Full 1080p run-through with real voice both ways and only pill/Go live clicks
+- [ ] **REC-03**: Ending line hands off to the consumer segment per `docs/demo-video-running-order.md`
+- [ ] **REC-04**: Optional simulated Visa payout-setup step before Go live, if the reconciled script keeps it
 
-## v2 Requirements
+### Real brain — Phase 5
 
-- **V2-01**: Merchant edits/deletes a locked-in line and the graph updates
-- **V2-02**: Re-upload of the daily price list diffs against the graph (price/stock changes only)
-- **V2-03**: Sale notifications from the bot back to the merchant (seam item 3 in `docs/demo-video-running-order.md`)
+- [ ] **BRAIN-01**: `read_source` does real extraction (PDF text + vision on photos) into the `catalog.json` shape incl. category-trained fields
+- [ ] **BRAIN-02**: `search_web` fetches the real site and extracts model names / notices
+- [ ] **BRAIN-03**: Cross-source conflicts detected and surfaced as `!` lines; agent resolves by asking
+- [ ] **BRAIN-04**: Agent converses freely under the category-trained prompt and asks the laptop-shop questions unprompted
+
+### Neo4j graph — Phase 6
+
+- [ ] **GRAPH-01**: Schema agreed with the consumer-bot developer in `docs/graph-schema.md`
+- [ ] **GRAPH-02**: Seed script loads Bizgram's 11 products + a second merchant stub
+- [ ] **GRAPH-03**: Go live MERGEs merchant/products/relationships idempotently
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Telegram bot, shopper checkout, purchase consent UX | Other developer's project (`apps/consumer-bot`) |
+| Telegram bot, shopper checkout, purchase consent UX | Other developer's project |
 | Real Visa APIs | Simulated per statement |
 | Auth, tests, CI, dashboards | 24 h; brief forbids dashboard vocabulary |
 | Phone layout / dark mode | Brief §7 |
+| Real STT/TTS other than the Realtime API | One API does both |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAGE-01 … PAGE-08 | Phase 1 | Complete |
-| REC-01 … REC-04 | Phase 2 | Pending |
-| GRAPH-01, GRAPH-03 | Phase 3 | Pending |
-| VOICE-01 … VOICE-04 | Phase 4 | Pending |
-| ING-01 … ING-03, GRAPH-02 | Phase 5 | Pending |
+| VOICE-01 … VOICE-06, SCRIPT-01 … SCRIPT-04 | Phase 2 | Pending |
+| UP-01 … UP-05 | Phase 3 | Pending |
+| REC-01 … REC-04 | Phase 4 | Pending |
+| BRAIN-01 … BRAIN-04 | Phase 5 | Pending |
+| GRAPH-01 … GRAPH-03 | Phase 6 | Pending |
 
-**Coverage:** v1 requirements: 22 total · mapped: 22 · unmapped: 0 ✓
+**Coverage:** v1 requirements: 34 total · mapped: 34 · unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-29*
-*Last updated: 2026-08-29 after re-scoping to merchant page only*
+*Last updated: 2026-08-29 — phases re-ordered: real voice with scripted brain before uploads; graph last*

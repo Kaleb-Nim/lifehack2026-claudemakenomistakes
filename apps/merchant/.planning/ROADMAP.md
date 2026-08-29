@@ -2,87 +2,104 @@
 
 ## Overview
 
-Ship the hardcoded page (done), make it recordable and record the merchant segment, then — only after the video is on DevPost — agree the Neo4j contract with the consumer-bot developer, put a real GPT Realtime voice agent behind the orb, and make uploads flow through LLM extraction into the shared graph so Go live is real.
+The demo video is recorded on a page where the **voice is real and the brain is scripted**: the owner really talks into the mic and the agent really talks back through the OpenAI GPT Realtime API, but what the agent says, what it "reads" from the uploads, what it "finds" on the website and which facts it locks in are all hardcoded to the shooting script. Files and URLs are genuinely dropped onto the page (so thumbnails are the real PDF pages and photos), but the extraction is canned. Only after the video is on DevPost do we swap the canned brain for real extraction, and only then write the merchant graph to Neo4j for the consumer bot.
 
 ## Phases
 
-- [x] **Phase 1: Hardcoded demo page** - Claude Design v3 frame, states A–G, Bizgram copy
-- [ ] **Phase 2: Recording readiness** - script reconciled, real-looking sources, timing, handoff to consumer segment
-- [ ] **Phase 3: Graph contract + seed** - Neo4j schema agreed with the bot developer; seed Bizgram so the bot has data
-- [ ] **Phase 4: Real voice agent** - GPT Realtime API with tool calls driving the log and pills
-- [ ] **Phase 5: Real ingest → Neo4j** - uploads → LLM extraction → conflicts → Go live writes the graph
+- [x] **Phase 1: Hardcoded demo page** - Claude Design v3 frame, states A–G, Bizgram copy, keyboard-driven
+- [ ] **Phase 2: Real-time voice, scripted brain** - GPT Realtime speaks/listens for real; every reply, tool result and locked fact is hardcoded
+- [ ] **Phase 3: Real uploads, canned reading** - files/photos/URLs actually land and are stored; thumbnails are real; "reading…" results are hardcoded per source
+- [ ] **Phase 4: Record the demo** - script reconciled, one-take run, merchant segment recorded and handed to the consumer segment
+- [ ] **Phase 5: Real brain** - real extraction, web fetch and free conversation replace the canned handlers
+- [ ] **Phase 6: Neo4j graph** - schema agreed with the bot developer; Go live writes the graph the bot reads
 
 ## Phase Details
 
 ### Phase 1: Hardcoded demo page
-**Goal**: A recordable page that matches the design and the brief, state by state
+**Goal**: A page that matches the design and the brief, state by state, driven by keyboard
 **Depends on**: Nothing
 **Requirements**: PAGE-01 … PAGE-08
 **UI hint**: yes
 **Success Criteria**:
-  1. `bun run dev` shows State A; stepping through shows log lines appending, cards reading then flipping, `!` → struck `✓`, pills, Go live
-  2. Every on-screen line matches the brief verbatim
+  1. States A–G render with the final copy; log lines, reading cards, `!` → `✓`, pills and Go live all animate
 **Plans**: 2 plans
 - [x] 01-01: Monorepo split
 - [x] 01-02: Data module, frame component, runner
 
-### Phase 2: Recording readiness
-**Goal**: The merchant segment can be shot in one take from this page
-**Depends on**: Phase 1; merchant-script decision (Bizgram vs Hock Seng) with Sahi
+### Phase 2: Real-time voice, scripted brain
+**Goal**: The orb is a live GPT Realtime session. The owner speaks, the agent answers out loud — but the agent's lines, tool results and log entries come from the script, beat by beat.
+**Depends on**: Phase 1
+**Requirements**: VOICE-01 … VOICE-06, SCRIPT-01 … SCRIPT-04
+**UI hint**: yes
+**Success Criteria**:
+  1. With `OPENAI_API_KEY` set, opening the page and speaking produces a spoken reply that is **exactly** the script's next agent line
+  2. The owner's words appear as the live caption (input transcription); the agent's line appears as the agent text
+  3. Each scripted beat's tool calls (`read_source`, `search_web`, `lock_fact`, `flag_conflict`, `resolve_flag`, `ask_pill`, `go_live`) are answered by canned handlers and the log / rows / pills update exactly as in Phase 1
+  4. `?mode=scripted` (no key) still plays the Phase 1 keyboard demo unchanged
+**Plans**: 3 plans
+- [ ] 02-01: Session plumbing — `app/api/realtime/session` route handler mints an ephemeral key; WebRTC connect; mic in / audio out; input + output transcription onto the page; env (`OPENAI_API_KEY`, model, voice) in `.env.local` + `.env.example`
+- [ ] 02-02: Beat runner — the shooting script as a beat array (`lib/agent-script.ts`): for each beat, the exact agent line to speak (`response.create` with "say exactly"), the tool calls to emit, when to wait for the owner to finish talking (server VAD `speech_stopped`) vs a pill tap; skip/advance keys for the operator
+- [ ] 02-03: Canned tools — tool schemas + handlers that return the hardcoded results from `lib/merchant-data.ts` (web result for `bizgram.com`, PDF/photo extracts, locked facts, conflicts); tool outputs drive the same state the frames used
+
+### Phase 3: Real uploads, canned reading
+**Goal**: The owner really drags the price-list PDF, the Acer flyer and three photos and pastes the URL; the page stores them and shows real thumbnails; what the agent "reads" out of them is hardcoded
+**Depends on**: Phase 2
+**Requirements**: UP-01 … UP-05
+**UI hint**: yes
+**Success Criteria**:
+  1. Dropping a file creates a Context row immediately with the real file name, size/pages and a real thumbnail (first PDF page rendered, image thumbnail)
+  2. Files are persisted (`uploads/` via a route handler; swap to Vercel Blob later) and reloadable by `?state`
+  3. Pasting `https://www.bizgram.com` creates the website row with favicon + URL; the "reading…" result is the canned website extract
+  4. The canned extract is chosen by source kind + filename match (`Pricelist*.pdf`, `ACER*.pdf`, `IMG_*.jpg`, URL host), with a generic fallback
+**Plans**: 2 plans
+- [ ] 03-01: Upload route handler + storage + drag/drop/paste wiring + thumbnails (pdf.js first page, `<img>` for photos)
+- [ ] 03-02: Source matcher → canned extract; agent `read_source` tool consumes the real file metadata + canned content
+
+### Phase 4: Record the demo
+**Goal**: The merchant segment is recorded from this page in one take and lands the handoff to the consumer segment
+**Depends on**: Phase 3; script decision (Bizgram vs Hock Seng) with Sahi
 **Requirements**: REC-01 … REC-04
 **UI hint**: yes
 **Success Criteria**:
-  1. `?auto=1` plays the whole beat sheet at the script's timings without a keypress
-  2. Thumbnails/file chips look like the real PDF pages and photos at 1080p
-  3. The ending line sets up the consumer segment per `docs/demo-video-running-order.md`
-**Plans**: TBD
-- [ ] 02-01: Reconcile script → update `lib/merchant-data.ts`
-- [ ] 02-02: Real-looking source assets + optional Visa payout-setup step
+  1. One reconciled merchant script; `lib/agent-script.ts` and `lib/merchant-data.ts` match it verbatim
+  2. A full run-through at 1080p with real voice both ways, no keypress except pills and Go live
+  3. Ending line sets up the consumer segment per `docs/demo-video-running-order.md`; segment uploaded/handed to the editor
+**Plans**: 2 plans
+- [ ] 04-01: Reconcile script; optional simulated Visa payout-setup step before Go live
+- [ ] 04-02: Rehearse, fix timing, record
 
-### Phase 3: Graph contract + seed
-**Goal**: Both developers agree what the bot reads; the bot has Bizgram data before real ingest exists
-**Depends on**: Phase 2 (video recorded — nothing real before that)
-**Requirements**: GRAPH-01, GRAPH-03
+### Phase 5: Real brain
+**Goal**: Replace canned handlers with real work; agent converses freely within the category-trained system prompt
+**Depends on**: Phase 4 (video is in)
+**Requirements**: BRAIN-01 … BRAIN-04
 **Success Criteria**:
-  1. `docs/graph-schema.md` exists and the consumer-bot developer has signed off
-  2. `bun run seed` loads Bizgram's 11 products + a second merchant stub into Neo4j; a Cypher query returns the Swift Go 14 with both prices and stock per location
+  1. `read_source` runs real extraction (PDF text/vision → catalog-shaped products); `search_web` fetches the real site
+  2. Cross-source price conflicts are detected and surfaced as `!` lines; the agent resolves them by asking
+  3. The agent asks the category-trained questions unprompted and locks facts from the owner's real answers
 **Plans**: TBD
-- [ ] 03-01: Schema doc + Neo4j connection (`NEO4J_URI` / user / password in `.env.local`)
-- [ ] 03-02: Seed script from the `catalog.json` shape
+- [ ] 05-01: Extraction + web fetch handlers
+- [ ] 05-02: Free-conversation system prompt + conflict detection
 
-### Phase 4: Real voice agent
-**Goal**: The orb is a real GPT Realtime session; the log fills from tool calls
-**Depends on**: Phase 3
-**Requirements**: VOICE-01 … VOICE-04
-**UI hint**: yes
+### Phase 6: Neo4j graph
+**Goal**: Go live writes the merchant + products into the centralised graph the Telegram bot reads
+**Depends on**: Phase 5; schema sign-off from the consumer-bot developer
+**Requirements**: GRAPH-01 … GRAPH-03
 **Success Criteria**:
-  1. Speaking to the page yields spoken replies and a live transcript on screen
-  2. Facts the agent locks in appear as log lines via tool calls; pills appear when it asks an either/or
-  3. `?mode=scripted` still plays the hardcoded demo unchanged
+  1. `docs/graph-schema.md` agreed; seed script loads Bizgram + a second merchant
+  2. Go live MERGEs merchant/products/relationships; the bot finds the Swift Go 14 with both prices and stock per location
 **Plans**: TBD
-- [ ] 04-01: Ephemeral-key route handler + WebRTC session + transcript
-- [ ] 04-02: Tool definitions + system prompt + wiring into log/pills
-
-### Phase 5: Real ingest → Neo4j
-**Goal**: Uploads are actually read; Go live writes the graph the bot queries
-**Depends on**: Phase 4
-**Requirements**: ING-01 … ING-03, GRAPH-02
-**Success Criteria**:
-  1. Dropping the real Bizgram price-list PDF produces a Context row with real extracted lines and products
-  2. A price conflict between two sources shows as a `!` line and can be resolved by voice
-  3. Go live MERGEs the merchant/products into Neo4j and the Telegram bot finds the Swift Go 14
-**Plans**: TBD
-- [ ] 05-01: Upload route handler + LLM extraction to catalog shape
-- [ ] 05-02: Conflict detection + Go live → Neo4j write
+- [ ] 06-01: Schema doc + connection + seed
+- [ ] 06-02: Go live → Neo4j write
 
 ## Progress
 
-Phases execute in order: 1 → 2 → 3 → 4 → 5
+Phases execute in order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Hardcoded demo page | 2/2 | Complete | 2026-08-29 |
-| 2. Recording readiness | 0/2 | Not started | - |
-| 3. Graph contract + seed | 0/2 | Not started | - |
-| 4. Real voice agent | 0/2 | Not started | - |
-| 5. Real ingest → Neo4j | 0/2 | Not started | - |
+| 2. Real-time voice, scripted brain | 0/3 | Not started | - |
+| 3. Real uploads, canned reading | 0/2 | Not started | - |
+| 4. Record the demo | 0/2 | Not started | - |
+| 5. Real brain | 0/2 | Not started | - |
+| 6. Neo4j graph | 0/2 | Not started | - |

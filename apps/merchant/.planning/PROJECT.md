@@ -19,10 +19,11 @@ The video must visibly show: the merchant uploads *anything* with zero effort �
 
 ### Active
 
-- [ ] Demo-recording readiness: merchant script reconciled (Bizgram vs Hock Seng), thumbnails/file chips look real, `?auto=1` timing matches the shooting script, segment hands off cleanly to the consumer segment
-- [ ] Real voice agent via **OpenAI GPT Realtime API** (speech in / speech out, on-screen transcript), driving the same Locked-in log and Context rows
-- [ ] Real ingest: uploaded PDF / photos / URL → LLM extraction → structured products with category-trained fields (`fits`, `upgradeable`, `good_for`/`not_for`, stock per location, warranty, policies)
-- [ ] **Go live writes the merchant + product graph to Neo4j** — the centralised store the Telegram bot queries. The graph schema is the contract with the consumer team.
+- [ ] **Real-time voice with a scripted brain (Phase 2).** The orb is a live OpenAI GPT Realtime session — the owner really speaks, the agent really speaks back — but every agent line is spoken verbatim from the shooting script, and every tool the agent "uses" (read a file, search the website, lock a fact, flag a conflict, ask an either/or, go live) is a real Realtime function tool whose handler returns hardcoded results. The video is recorded on this.
+- [ ] **Real uploads, canned reading (Phase 3).** PDFs, photos and the website URL genuinely land on the page and are stored; thumbnails are the real pages/photos; what the agent "reads" out of them is hardcoded per source.
+- [ ] **Record the merchant segment (Phase 4).** Script reconciled with Sahi; one-take run; handoff to the consumer segment.
+- [ ] **Real brain (Phase 5).** Swap canned handlers for real extraction / web fetch / free conversation — UI untouched because it only ever reacted to tool calls.
+- [ ] **Neo4j graph (Phase 6).** Go live writes the merchant + product graph the Telegram bot reads. Schema is the contract with the consumer developer.
 
 ### Out of Scope
 
@@ -39,14 +40,18 @@ The video must visibly show: the merchant uploads *anything* with zero effort �
 - Code: `components/Onboarding.tsx` (frame + runner), `lib/merchant-data.ts` (frames A–G), `app/globals.css` (tokens + keyframes). Fixed 1920×1080 stage.
 - Judging: walk-in pitch; DevPost video decides. Rubrics: Innovation, UX, Feasibility, Scalability, Trust & Safety.
 
-### Target architecture (for the real-build phases)
+### Architecture
 
 ```
-browser (Next.js page)
-  ├─ voice: OpenAI GPT Realtime API (WebRTC; ephemeral key from a route handler)
-  │     tools: lock_fact(), flag_conflict(), ask_pill(), read_source(), go_live()
-  ├─ uploads → route handler → LLM extraction (PDF/image/URL) → structured products
-  └─ Go live → route handler → Neo4j write
+browser (Next.js page, apps/merchant)
+  ├─ voice: OpenAI GPT Realtime API over WebRTC
+  │     app/api/realtime/session → ephemeral key (OPENAI_API_KEY server-side only)
+  │     tools: read_source, search_web, lock_fact, flag_conflict, resolve_flag, ask_pill, go_live
+  │     Phase 2: agent lines spoken verbatim from lib/agent-script.ts; tool handlers return canned data
+  │     Phase 5: same tools, real handlers; agent converses freely
+  ├─ uploads: drop/picker/paste → app/api/upload → uploads/ (Vercel Blob later); pdf.js thumbnails
+  │     Phase 3: canned extract per source kind/filename · Phase 5: real extraction
+  └─ Go live → Phase 6: route handler → Neo4j write
 
 Neo4j (centralised, shared)          ← Telegram bot (apps/consumer-bot) reads
   (:Merchant {id,name,category,hours,contact,policies})
@@ -57,11 +62,11 @@ Neo4j (centralised, shared)          ← Telegram bot (apps/consumer-bot) reads
   (Product)-[:SOURCED_FROM {kind}]->(:Source {file,url})
 ```
 
-Node/relationship names above are the proposed contract — agree them with the consumer-bot developer before Phase 4 writes anything.
+Node/relationship names above are the proposed contract — agree them with the consumer-bot developer before Phase 6 writes anything.
 
 ## Constraints
 
-- **Timeline**: 24 h; deliverable order is video → DevPost → real build. Nothing real before the video is recorded.
+- **Timeline**: 24 h; the video is recorded on the Phase 2–3 build (real voice, canned brain). Real extraction and Neo4j only after the video is in.
 - **Tech stack**: Bun (not npm/node); Next.js 16 App Router (read `node_modules/next/dist/docs` — APIs differ from training data); Tailwind v4; Neo4j (Aura or local) for the shared graph; OpenAI GPT Realtime API for voice.
 - **Design**: Modernist tokens, Archivo, one accent `#ec3013`, line-SVG icons. No dashboard or wizard vocabulary.
 - **Copy**: agent/owner lines are recorded as voice; on-screen text matches the brief verbatim.
@@ -74,9 +79,12 @@ Node/relationship names above are the proposed contract — agree them with the 
 | Hardcode the whole demo first, real build last | Team huddle after mentor; DevPost video wins | ✓ Good (Phase 1 shipped in hours) |
 | GSD scope = merchant page only; bot is a separate developer's project | Two pairs, two codebases, one shared graph | — Pending |
 | Neo4j as the centralised product store the bot reads | Category-trained fields are relationships (fits / upgradeable / stocked-at) — a graph, not rows; single source for both halves | — Pending |
-| OpenAI GPT Realtime API for the voice agent | Speech-to-speech with tool calls; tools map 1:1 onto the on-screen log/rows | — Pending |
+| OpenAI GPT Realtime API for the voice agent, **from the demo onward** | Real listening and speaking is the novelty on camera; speech-to-speech with tool calls | — Pending |
+| Scripted brain behind real voice for the video | Agent lines spoken verbatim, tool handlers canned — deterministic takes, no derailing, and the UI only ever reacts to tool calls so the real brain is a handler swap | — Pending |
+| Uploads are real, reading is canned | Real thumbnails/filenames on screen; extraction is the expensive, flaky part | — Pending |
+| Graph last | The bot can be seeded from `catalog.json`; the page doesn't need Neo4j to be filmed | — Pending |
 | Bizgram copy from the brief, not the design file's "Ah Seng" sample | Repo docs mark the Bizgram copy as final | ⚠️ Revisit — script reconciliation with Hock Seng pending |
 | Fixed 1920×1080 stage scaled via CSS transform | Recording target is 1080p; brief excludes responsive | ✓ Good |
 
 ---
-*Last updated: 2026-08-29 after re-scoping to merchant page only*
+*Last updated: 2026-08-29 — phases re-ordered: real-time voice first, graph last*

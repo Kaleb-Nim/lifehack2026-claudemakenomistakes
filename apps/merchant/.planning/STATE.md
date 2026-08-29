@@ -2,11 +2,11 @@
 gsd_state_version: '1.0'
 status: executing
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 1
-  total_plans: 10
+  total_plans: 13
   completed_plans: 2
-  percent: 20
+  percent: 15
 ---
 
 # Project State
@@ -16,16 +16,16 @@ progress:
 See: apps/merchant/.planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** Video shows upload-anything → structured products → category-smart questions → Go live.
-**Current focus:** Phase 2 — Recording readiness
+**Current focus:** Phase 2 — Real-time voice, scripted brain
 
 ## Current Position
 
-Phase: 2 of 5 (Recording readiness)
-Plan: 0 of 2 in current phase
-Status: Ready to plan — blocked on the merchant-script decision (Bizgram vs Hock Seng) with Sahi
-Last activity: 2026-08-29 — GSD re-scoped to the merchant page only and moved to `apps/merchant/.planning/`; target architecture recorded (Neo4j shared graph, GPT Realtime voice)
+Phase: 2 of 6 (Real-time voice, scripted brain)
+Plan: 0 of 3 in current phase
+Status: Ready to plan
+Last activity: 2026-08-29 — Phases re-ordered: GPT Realtime voice (real speech both ways, scripted lines + canned tool results) comes before uploads and recording; real brain and Neo4j after the video. Needs `OPENAI_API_KEY` in `apps/merchant/.env.local`.
 
-Progress: [██░░░░░░░░] 20%
+Progress: [█░░░░░░░░░] 15%
 
 ## Accumulated Context
 
@@ -38,15 +38,16 @@ See PROJECT.md Key Decisions. Recent:
 
 ### Pending Todos
 
-- Decide merchant script (Bizgram vs Hock Seng) before recording — REC-01
+- `OPENAI_API_KEY` for Phase 2 (Realtime API access on the account)
+- Decide merchant script (Bizgram vs Hock Seng) before Phase 4 — REC-01
 - Decide product name (`[PRODUCT NAME]` in header)
-- Agree graph schema with the consumer-bot developer — GRAPH-01
-- Neo4j instance (Aura free tier vs local) and OpenAI key for the real build
+- Agree graph schema with the consumer-bot developer — GRAPH-01 (Phase 6)
+- Neo4j instance (Aura free tier vs local) for Phase 6
 
 ### Blockers/Concerns
 
 - `gsd-workflow` MCP failed to connect; planning files hand-written from GSD templates
-- Nothing real (voice, ingest, Neo4j) may start before the demo video is recorded — team decision
+- Real extraction and Neo4j wait until the video is recorded — team decision. Real voice is allowed (and required) for the video.
 
 ## Deferred Items
 
