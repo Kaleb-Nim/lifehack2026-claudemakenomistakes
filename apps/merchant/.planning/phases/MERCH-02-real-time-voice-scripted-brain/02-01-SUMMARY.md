@@ -94,10 +94,11 @@ coverage:
 
 duration: 55min
 completed: 2026-08-29
-status: halted
+status: complete
+checkpoint_closed: 2026-08-29 (Task 3, by Kaleb — see 'Task 3 checkpoint result')
 ---
 
-# Phase MERCH-02 Plan 01: Real-time voice, scripted brain (tracer) Summary — PAUSED at Task 3 checkpoint
+# Phase MERCH-02 Plan 01: Real-time voice, scripted brain (tracer) Summary — complete (Task 3 checkpoint closed)
 
 **One live OpenAI Realtime WebRTC session speaks `BEATS[0].line` verbatim on orb tap, with the server-side key mint, transport, and one canned `lock_fact` tool wired end to end — verified against the real API in headless Chromium; Task 3's human-in-headset rehearsal is the only remaining step.**
 
@@ -105,8 +106,8 @@ status: halted
 
 - **Duration so far:** 55 min
 - **Started:** 2026-08-29T09:05:00Z (approx.)
-- **Completed:** N/A — plan paused at Task 3 checkpoint
-- **Tasks:** 2 of 3 complete (Task 1 auto, Task 2 tracer); Task 3 (`checkpoint:human-verify`) awaiting a human with a headset
+- **Completed:** 2026-08-29 (Task 3 checkpoint closed by Kaleb)
+- **Tasks:** 3 of 3 (Task 1 auto, Task 2 tracer, Task 3 human-verify closed with the result below)
 - **Files modified:** 11 (8 created, 3 modified)
 
 ## Accomplishments
@@ -126,7 +127,8 @@ Each task was committed atomically:
 1. **Task 1: Lift Onboarding state into hooks/useOnboardingState.ts and clear the two lint errors** — `1d02d9b` (feat)
 2. **Task 2: End-to-end "the orb speaks one scripted line" — one path only** — `7965542` (feat)
 
-Task 3 (`checkpoint:human-verify`) has not run — no commit yet.
+3. **Task 3: Tracer rehearsal (`checkpoint:human-verify`)** — no code commit; the checkpoint is a
+   verification gate, and its result is recorded below under "Task 3 checkpoint result".
 
 ## Files Created/Modified
 
@@ -189,9 +191,58 @@ None beyond the deviations above.
 
 None — `.env.local` already existed with a working `OPENAI_API_KEY` in this environment; `.env.example` documents the three env vars for anyone setting this project up fresh.
 
+## Task 3 checkpoint result
+
+Closed 2026-08-29 by Kaleb, during `/gsd-execute-phase MERCH-02`. Task 3 asked a human in a headset
+to confirm six items against the deployed model. Outcome, item by item:
+
+| # | Item | Result |
+|---|---|---|
+| 1 | Orb tap → one permission dialog, `connecting` animation | **Pass** — confirmed in-browser |
+| 2 | Spoken words match `BEATS[0].line` verbatim | **Pass** — matched character-for-character |
+| 3 | Talk over the agent mid-line → line NOT cancelled | **Moot by design** — see below |
+| 4 | 30 s silence → no unprompted speech | **Pass** — 36 s with real committed user turns, zero unrequested responses |
+| 5 | Sub-1 s cough → beat does NOT advance | **Superseded by 02-02** — see below |
+| 6 | >2 s speech → beat advances to frame B | **Pass (visually)** — the frame advances; no second utterance follows, which is 02-01's scope boundary, not a defect |
+
+**Model and voice actually used:** `gpt-realtime`, voice `marin` (per `.env.local`; defaults in
+`app/api/realtime/session/route.ts`).
+
+**Tap-to-first-audio latency:** not measured. The acceptance criteria asked for it and this
+checkpoint did not produce a number. Recorded as a known gap rather than a fabricated figure — the
+related measurement that does exist is 9.6 s of continuous clean agent audio after `34a85cf`,
+ending in `output_audio_buffer.stopped`.
+
+**Item 3 is moot, not skipped.** Commit `34a85cf` added explicit `echoCancellation` /
+`noiseSuppression` / `autoGainControl` constraints plus a hard mic gate that disables the local
+track while the agent speaks (`hooks/useRealtimeSession.ts:101–126`, `:148–150`). That fix was
+required — the agent's own audio was feeding back through the speakers, server VAD scored it as an
+owner turn, and the server flushed the output audio buffer ~200 ms into every line. Its deliberate
+consequence is that **barge-in no longer exists**, so item 3's talk-over test can no longer be
+performed. `interrupt_response: false` remains set and is still correct; it was never the mechanism
+at fault (it stops a response being *cancelled*, not its audio being *flushed*).
+
+**Items 5 and 6 are superseded, and why they were not chased further.** Both test the
+`speech_stopped` → beat-advance trigger, and plan 02-02 Task 2 replaces that trigger outright. The
+guard behind item 5 was itself rewritten in `34a85cf`: `MIN_SPEECH_MS = 1200`
+(`lib/agent-script.ts:181`), with `lib/beat-runner.ts:131–134` now subtracting
+`VAD_SILENCE_DURATION_MS` before comparing — the fix for the bug where a 400 ms cough measured
+~1300 ms and cleared a 1200 ms guard built to reject it. Re-verifying the old trigger by hand and
+then immediately replacing it would have tested code that is about to stop existing.
+
+**The behaviour that prompted the closure.** The owner reported the agent going silent after its
+opening line and no phrase reviving it. That is 02-01's documented scope boundary, confirmed again
+here against the live tree: `lib/beat-runner.ts:87` is the only `response.create` send site in the
+app; it sits inside `enterBeat`, whose sole caller (`:150`) is guarded by
+`currentBeatRef.current === null` while `enterBeat` sets that ref on its first line — so it fires
+exactly once per session. With `create_response: false` on the session, the model cannot speak
+unprompted either. A qualified `speech_stopped` still calls `go(idx + 1)` at `:141`, so **the page
+advances a frame in silence** — visuals move, voice does not. Not an API fault, not a VAD fault,
+not a mic fault. Plan 02-02 Task 2 is the fix.
+
 ## Next Phase Readiness
 
-**Blocked on Task 3** — a human checkpoint requiring a person at a microphone with a headset. See the `## CHECKPOINT REACHED` block returned alongside this summary for exact instructions (worktree path, dev-server command, URL, what to say, what to observe).
+**Unblocked.** Task 3's checkpoint was closed on 2026-08-29 — see "Task 3 checkpoint result" above. Plans 02-02 and 02-03 can build on the transport.
 
 Everything automatable has been verified against the real OpenAI Realtime API in headless Chromium:
 - Ephemeral-key mint round-trips with two distinct secrets per call.
@@ -199,8 +250,8 @@ Everything automatable has been verified against the real OpenAI Realtime API in
 - Exactly one `response.create` is sent, with exactly one matching `response.created` (no spontaneous model response — `create_response:false`/`tool_choice:"none"` holding).
 - The `no_key` 503 fallback and `?mode=scripted` both leave the page fully functional with zero exceptions and zero session-route network calls.
 
-**Not verifiable without a human:** real speech triggering `speech_stopped`-based beat advance, the `interrupt_response:false` talk-over test, and the unprompted-silence test (30 s) against the deployed model — these are exactly Task 3's six checklist items. Once Task 3 passes (or its documented contingency is applied), plans 02-02 and 02-03 can build on a proven transport.
+**What a human confirmed, and what the checkpoint could not reach:** recorded in full under "Task 3 checkpoint result" above. In short — items 1, 2, 4 pass against the deployed model; item 3 is moot by design after `34a85cf`; items 5 and 6 are superseded by 02-02, which replaces the advance trigger they were written to test.
 
 ---
 *Phase: MERCH-02-real-time-voice-scripted-brain*
-*Paused: 2026-08-29 (Task 3 checkpoint)*
+*Completed: 2026-08-29 (Task 3 checkpoint closed)*
