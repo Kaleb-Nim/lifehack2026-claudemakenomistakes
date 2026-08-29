@@ -39,9 +39,9 @@ export default async function DashboardPage() {
           >
             <span
               className="inline-block h-2 w-2 rounded-full"
-              style={{ background: d.connected ? "#1a7f37" : "var(--color-neutral-500)" }}
+              style={{ background: d.configured && !d.error ? "#1a7f37" : "var(--color-neutral-500)" }}
             />
-            {d.connected ? "Accepting card payments in agent chats" : "Not connected"}
+            {d.configured && !d.error ? "Accepting card payments in agent chats" : "Not connected"}
           </div>
           <div className="text-sm" style={{ color: "var(--color-neutral-700)" }}>
             {MERCHANT.legalName} · {MERCHANT.outlet}
@@ -92,15 +92,26 @@ export default async function DashboardPage() {
       <section className="mt-8">
         <h2 className="mb-4 text-xl font-semibold tracking-tight">Payments today</h2>
 
-        {!d.connected ? (
+        {!d.configured ? (
           <p className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" }}>
-            Not connected to Supabase. Set <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_KEY</code> in{" "}
+            Not connected. Set <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_KEY</code> in{" "}
             <code>apps/merchant/.env.local</code>, then reload.
           </p>
-        ) : d.orders.length === 0 ? (
-          <p className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" }}>
-            No payments yet today. A sale completed in a {MERCHANT.product} chat appears here straight away.
+        ) : d.error ? (
+          <p className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-accent-100)", color: "var(--color-accent-800)" }}>
+            Query failed: <code>{d.error}</code>
           </p>
+        ) : d.orders.length === 0 ? (
+          <div className="rounded-2xl p-6 text-sm" style={{ background: "var(--color-neutral-100)", color: "var(--color-neutral-600)" }}>
+            <p>No payments for {MERCHANT.name} yet. A sale closed in a {MERCHANT.product} chat appears here straight away.</p>
+            {d.otherMerchants.length > 0 && (
+              <p className="mt-3">
+                The orders table does have rows for: <strong>{d.otherMerchants.join(", ")}</strong>. Set{" "}
+                <code>MERCHANT_NAME</code> in <code>.env.local</code> to one of those (or <code>*</code> for all
+                merchants) to show them here.
+              </p>
+            )}
+          </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl" style={{ background: "var(--color-neutral-100)" }}>
             <table className="w-full border-collapse text-left">
