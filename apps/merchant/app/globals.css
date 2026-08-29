@@ -68,12 +68,18 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── Stage: fixed 1920×1080, scaled to fit the viewport ── */
-.viewport { width: 100vw; height: 100vh; display: grid; place-items: center; overflow: hidden; }
+/* The stage is centred with absolute positioning + translate(-50%,-50%), not
+   `place-items: center`. A 1920x1080 box is bigger than the viewport it sits in,
+   and an oversized grid item falls back from `center` to `start` — which parked
+   the layout box at (0,0) and let `transform-origin: center center` push the
+   scaled frame down-right by 960*(1-scale) / 540*(1-scale), clipping the bottom
+   (and the Go live button with it) at every zoom level below 100%. */
+.viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
 .stage {
   width: 1920px; height: 1080px; flex: none;
   display: flex; flex-direction: column;
   background: var(--color-bg); color: var(--color-text);
-  overflow: hidden; position: relative;
+  overflow: hidden; position: absolute; left: 50%; top: 50%;
   transform-origin: center center;
 }
 

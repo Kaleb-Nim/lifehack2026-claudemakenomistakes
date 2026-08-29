@@ -131,7 +131,7 @@ export default function Onboarding() {
 
   return (
     <div className="viewport">
-      <div className="stage" style={{ transform: `scale(${scale})` }}>
+      <div className="stage" style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
         {/* Header */}
         <div className="hdr">
           <div className="hdr-brand">{PRODUCT_NAME}</div>
