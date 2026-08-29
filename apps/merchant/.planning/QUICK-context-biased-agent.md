@@ -1,7 +1,6 @@
 # Quick task — swap the verbatim script for a context-biased live agent
 
-**Status:** ready to execute · created 2026-08-29
-**Run with:** `/gsd-quick` from `apps/merchant`, in a fresh context window.
+**Status:** ABSORBED into `phases/MERCH-02-real-time-voice-scripted-brain/02-02-PLAN.md` (2026-08-29). **Do not run this as a separate quick task** — it is Tasks 1 and 2 of that plan, together with the agent-silent fix, which is the same one line of intent. Kept here as the decision record and the source of the do-not-regress list. · created 2026-08-29
 
 ---
 

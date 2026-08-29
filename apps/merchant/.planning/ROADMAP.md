@@ -27,19 +27,19 @@ The demo video is recorded on a page where the **voice is real and the brain is 
 - [x] 01-02: Data module, frame component, runner
 
 ### Phase 2: Real-time voice, scripted brain
-**Goal**: The orb is a live GPT Realtime session. The owner speaks, the agent answers out loud — but the agent's lines, tool results and log entries come from the script, beat by beat.
+**Goal**: The orb is a live GPT Realtime session. The owner speaks and the agent answers out loud in its own words, biased by `lib/agent-context.md` so it can never leave the shop's facts — while the screen (frames, log entries, cards, pills, Go live) stays hardcoded and advances beat by beat. *(Re-scoped 2026-08-29: the agent's words are live, the screen is not. Was: every line spoken verbatim.)*
 **Depends on**: Phase 1
 **Requirements**: VOICE-01 … VOICE-06, SCRIPT-01 … SCRIPT-04
 **UI hint**: yes
 **Success Criteria**:
-  1. With `OPENAI_API_KEY` set, opening the page and speaking produces a spoken reply that is **exactly** the script's next agent line
-  2. The owner's words appear as the live caption (input transcription); the agent's line appears as the agent text
+  1. With `OPENAI_API_KEY` set, opening the page and speaking produces a spoken reply **every turn** — natural, short, and containing no price, product or policy outside `lib/agent-context.md`; editing that file changes the next session with no rebuild
+  2. The owner's words appear as the live caption (input transcription); the on-screen agent text stays the deterministic `frame.agentLine`
   3. Each scripted beat's tool calls (`read_source`, `search_web`, `lock_fact`, `flag_conflict`, `resolve_flag`, `ask_pill`, `go_live`) are answered by canned handlers and the log / rows / pills update exactly as in Phase 1
   4. `?mode=scripted` (no key) still plays the Phase 1 keyboard demo unchanged
   5. When `read_source` fires, that source's Context card scrolls itself into view inside the existing scroll container (carried forward from Phase 1 verification `52f5d4e`: state C has ~891 px of content in a ~791 px box and nobody scrolls during a take)
 **Plans**: 3 plans
 - [ ] 02-01-PLAN.md — Tracer: one live scripted beat end to end. State lifted into `hooks/useOnboardingState.ts` (three animation regressions pinned by a bun test), `app/api/realtime/session` mints the ephemeral key, WebRTC connects on the orb tap, the agent speaks beat A verbatim and one canned `lock_fact` moves the page a frame. Human rehearsal confirms the `create_response: false` / `interrupt_response: false` silence contract on the deployed model.
-- [ ] 02-02-PLAN.md — The full script and the live conversation loop. All eight beats A–G in `lib/agent-script.ts` (each `line` is the frame's own `agentLine`, so spoken and on-screen copy cannot drift), the full beat progression with the 1.2 s minimum-speech guard and the `→`/`←`/`R` operator keys, and the caption bubble fed by real input transcription.
+- [ ] 02-02-PLAN.md — **Re-planned 2026-08-29 around the context bias** (the verbatim original is kept at `archive/02-02-PLAN-verbatim.md`, `status: superseded`). The live conversation loop: `lib/agent-context.md` served as the session `instructions` (fail-closed if unreadable), a bare `response.create` on every qualified owner turn — which is also the fix for the agent going silent after its opening — an active-response guard, split reply (400 ms) and advance (1.2 s) thresholds, all eight beats A–G driving the screen only, the `→`/`←`/`R` operator keys, and the caption bubble fed by real input transcription.
 - [ ] 02-03-PLAN.md — Canned tools, operator chrome and silent fallback. Seven tool handlers returning hardcoded results from `lib/merchant-data.ts`, the UI reacting only to handler returns, the read-source scroll-into-view fix, the teleprompter and status chip (absent from the DOM under `?record=1`), the `M`/`Esc` keys, and every failure path falling silently back to the Phase 1 demo.
 
 ### Phase 3: Real uploads, canned reading

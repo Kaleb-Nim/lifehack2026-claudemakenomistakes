@@ -1,4 +1,15 @@
 ---
+status: superseded
+superseded_on: 2026-08-29
+superseded_by: 02-02-PLAN.md
+superseded_reason: >
+  Kaleb decided on 2026-08-29 to drive the agent from lib/agent-context.md as a heavy
+  context bias instead of speaking fixed lines verbatim. The verbatim approach waited
+  ~9.6 s on a full TTS round-trip for the greeting alone and could not react to what the
+  owner actually said. Kept for reference only — do NOT execute this plan.
+---
+
+---
 phase: MERCH-02-real-time-voice-scripted-brain
 plan: 02
 type: execute
