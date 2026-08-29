@@ -10,6 +10,7 @@
 // it overrides training data (never the deprecated /v1/realtime?model= shape).
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { ECHO_GRACE_MS } from "../lib/agent-script";
 
 export type SessionPhase = "idle" | "connecting" | "live" | "scripted";
 export type SessionFailure = null | "no_key" | "mint_failed" | "mic_denied" | "ice_failed" | "dropped" | "operator";
@@ -96,6 +97,37 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
     onEventRef.current?.(event);
   }, []);
 
+  /**
+   * Hard mic gate while the agent is speaking.
+   *
+   * Echo cancellation alone does not survive a room with open speakers: the agent's audio
+   * leaks back in, server VAD calls it an owner turn, and the server clears the output
+   * buffer — cutting the agent off mid-line. `interrupt_response: false` does not prevent
+   * this; it stops the *response* being cancelled, not the *audio* being flushed, so
+   * `response.done` still arrives with the full transcript while nothing was heard.
+   *
+   * Disabling the local track is the only thing that stops it at the source, and it costs
+   * nothing the demo wants: the owner has no scripted turn during the agent's line. The
+   * track is re-enabled ECHO_GRACE_MS after the audio stops so the tail cannot re-trigger.
+   *
+   * Consequence, deliberate: the agent can no longer be barged in on. For this phase that
+   * is the point — a take cannot be derailed by a cough, a door, or the agent hearing
+   * itself. Delete this effect to restore barge-in.
+   */
+  useEffect(() => {
+    const stream = streamRef.current;
+    if (!stream || muted) return; // an operator mute must always win over the gate
+    if (speaking) {
+      stream.getAudioTracks().forEach((t) => { t.enabled = false; });
+      return;
+    }
+    const id = setTimeout(() => {
+      if (!streamRef.current || muted) return;
+      streamRef.current.getAudioTracks().forEach((t) => { t.enabled = true; });
+    }, ECHO_GRACE_MS);
+    return () => clearTimeout(id);
+  }, [speaking, muted]);
+
   const connect = useCallback(() => {
     if (connectingRef.current || phase === "live") return;
     connectingRef.current = true;
@@ -108,7 +140,15 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
       try {
         [mintRes, stream] = await Promise.all([
           fetch("/api/realtime/session", { method: "POST" }),
-          navigator.mediaDevices.getUserMedia({ audio: true }),
+          // Echo cancellation is not optional here. Without it the agent's own voice comes
+          // back through the speakers, server VAD reads it as the owner talking, and the
+          // server clears the output audio buffer mid-line — the agent cuts itself off
+          // ~200ms into every beat. Browsers usually default these on, but `audio: true`
+          // leaves it to the UA; on a desktop with speakers that default is not enough,
+          // so they are requested explicitly and backed by the mic gate below.
+          navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          }),
         ]);
       } catch (err) {
         disconnect(isPermissionError(err) ? "mic_denied" : "mint_failed");

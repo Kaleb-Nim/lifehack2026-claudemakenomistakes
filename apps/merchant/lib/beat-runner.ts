@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useRealtimeSession, type RealtimeEvent, type SessionFailure, type SessionPhase } from "../hooks/useRealtimeSession";
-import { AUDIO_TIMEOUT_MS, BEATS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, verbatim, type Beat } from "./agent-script";
+import { AUDIO_TIMEOUT_MS, BEATS, ECHO_GRACE_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, verbatim, type Beat } from "./agent-script";
 
 /** The slice of useOnboardingState() the runner needs — kept structural, not imported, to avoid coupling this module to the hook's full surface. */
 export interface BeatRunnerOnboarding {
@@ -51,6 +51,10 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   const firedToolsRef = useRef<Set<string>>(new Set());
   const speechStartedAtRef = useRef<number | null>(null);
   const audioArrivedRef = useRef(false);
+  /** True while the agent's own audio is playing out of the speakers. */
+  const agentSpeakingRef = useRef(false);
+  /** When the agent's audio last stopped — inbound speech within ECHO_GRACE_MS of this is the agent's own tail. */
+  const agentStoppedAtRef = useRef(0);
   const audioTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onboardingRef = useRef(onboarding);
   useEffect(() => {
@@ -92,11 +96,27 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   const handleEvent = useCallback((event: RealtimeEvent) => {
     if (event.type === "output_audio_buffer.started") {
       audioArrivedRef.current = true;
+      agentSpeakingRef.current = true;
       if (audioTimeoutRef.current) { clearTimeout(audioTimeoutRef.current); audioTimeoutRef.current = null; }
       setAgentLine(currentBeatRef.current?.line ?? null);
     }
 
+    if (event.type === "output_audio_buffer.stopped" || event.type === "output_audio_buffer.cleared") {
+      agentSpeakingRef.current = false;
+      agentStoppedAtRef.current = Date.now();
+      // Any speech window still open here began under the agent's own voice — discard it
+      // rather than letting it be measured as an owner turn.
+      speechStartedAtRef.current = null;
+    }
+
     if (event.type === "input_audio_buffer.speech_started") {
+      // Echo rejection. Speech that begins while the agent is talking, or in the short tail
+      // after it stops, is the agent's own audio coming back through the speakers — not the
+      // owner. Recording without a headset produces this on every single beat.
+      if (agentSpeakingRef.current || Date.now() - agentStoppedAtRef.current < ECHO_GRACE_MS) {
+        speechStartedAtRef.current = null;
+        return;
+      }
       speechStartedAtRef.current = Date.now();
       return;
     }
@@ -104,8 +124,14 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     if (event.type === "input_audio_buffer.speech_stopped") {
       const startedAt = speechStartedAtRef.current;
       speechStartedAtRef.current = null;
-      if (startedAt == null) return;
-      if (Date.now() - startedAt < MIN_SPEECH_MS) return; // a cough or an "mm" cannot advance a take
+      if (startedAt == null) return; // no owner turn was open — echo, or already discarded
+
+      // Server VAD only emits speech_stopped after silence_duration_ms of quiet, so the
+      // wall-clock span between the two events over-reports the real speech by that much.
+      // Subtracting it is what makes MIN_SPEECH_MS mean what it says: without this a 400ms
+      // cough measures ~1300ms and clears a 1200ms guard that was meant to reject it.
+      const spokenMs = Date.now() - startedAt - VAD_SILENCE_DURATION_MS;
+      if (spokenMs < MIN_SPEECH_MS) return; // a cough or an "mm" cannot advance a take
 
       const beat = currentBeatRef.current;
       if (!beat || beat.advanceOn !== "speech_stopped") return;

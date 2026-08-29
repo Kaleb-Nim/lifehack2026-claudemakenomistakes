@@ -9,7 +9,7 @@
 // under audio.input / audio.output.
 
 import { NextResponse } from "next/server";
-import { SYSTEM_PROMPT, TOOLS } from "../../../../lib/agent-script";
+import { SYSTEM_PROMPT, TOOLS, TURN_DETECTION } from "../../../../lib/agent-script";
 
 // Callable more than once per page load (a mid-take reconnect needs a fresh secret) —
 // forbid caching so every POST actually re-mints. See node_modules/next/dist/docs
@@ -31,14 +31,11 @@ export async function POST() {
   // top-level `voice` / `turn_detection` / `input_audio_transcription` session keys.
   const audio = {
     input: {
-      transcription: { model: "gpt-4o-mini-transcribe", language: "en" }, turn_detection: {
-        type: "server_vad", threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 900,
-        // The whole scripted-brain contract (02-RESEARCH.md): with both disabled the model
-        // never responds on its own while VAD events still fire, so lib/beat-runner.ts stays
-        // the only issuer of response.create. idle_timeout_ms is deliberately absent — it
-        // would re-trigger a spontaneous response after a deliberate scripted silence.
-        create_response: false, interrupt_response: false,
-      },
+      transcription: { model: "gpt-4o-mini-transcribe", language: "en" },
+      // The whole scripted-brain contract (02-RESEARCH.md). Shared with the beat runner
+      // via lib/agent-script.ts so silence_duration_ms cannot drift out of sync with the
+      // min-speech measurement that subtracts it.
+      turn_detection: TURN_DETECTION,
     },
     output: { voice },
   };

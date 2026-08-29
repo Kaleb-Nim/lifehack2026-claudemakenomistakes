@@ -159,7 +159,36 @@ export function verbatim(line: string): string {
   return `Say this exactly, word for word, and nothing else: ${line}`;
 }
 
+// ── Server VAD config — the single source of truth ──────────────────────────
+// app/api/realtime/session/route.ts sends this to OpenAI; lib/beat-runner.ts subtracts
+// SILENCE_DURATION_MS below when measuring how long the owner actually spoke. If these
+// two ever disagree the min-speech guard silently mis-measures, so they share one object.
+export const VAD_SILENCE_DURATION_MS = 900;
+
+export const TURN_DETECTION = {
+  type: "server_vad" as const,
+  threshold: 0.5,
+  prefix_padding_ms: 300,
+  silence_duration_ms: VAD_SILENCE_DURATION_MS,
+  // With both disabled the model never responds on its own while VAD events still fire,
+  // so lib/beat-runner.ts stays the only issuer of response.create. idle_timeout_ms is
+  // deliberately absent — it would re-trigger a response after a scripted silence.
+  create_response: false,
+  interrupt_response: false,
+};
+
 // ── Beat-advance timing constants ───────────────────────────────────────────
 export const MIN_SPEECH_MS = 1200; // a cough or an "mm" cannot advance a take
 export const SETTLE_MS = 400;      // pause before the agent's next line starts
 export const AUDIO_TIMEOUT_MS = 2000; // no audio within this window of response.create = dropped session
+
+/**
+ * How long after the agent's audio stops that inbound speech is still treated as the
+ * agent's own voice echoing back through the speakers rather than the owner talking.
+ *
+ * Without this the demo is unshootable on anything but a headset: the agent's tail leaks
+ * into the mic, server VAD reports a speech turn, and the beat advances while the agent
+ * is still mid-sentence. Observed directly — `speech_started` fired immediately after
+ * `response.done` with nobody in the room talking.
+ */
+export const ECHO_GRACE_MS = 400;
