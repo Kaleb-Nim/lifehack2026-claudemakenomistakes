@@ -276,25 +276,104 @@ so the operator can never mistake it for page content — see §4/§5 above.
 
 ## UI Considerations
 
-> Populated by the UI-consideration probe (shape-rooted state coverage). Responsive/dark-mode/WCAG
-> are handled separately above as consciously out-of-scope, per the phase's scope constraint —
-> they are not "unresolved" rows here.
+> Populated by the UI-consideration probe (shape-rooted state coverage), re-run after checker
+> approval with corrected element kinds. The first pass classified the orb, caption, agent line and
+> status chip as plain `static-content` and surfaced only overflow/long-text for them; they are
+> genuinely `media` + `interactive-control` (async audio, streaming transcription, a tappable
+> control), so the kinds were authored and the probe re-run — 21 applicable rose to 40. The 19 rows
+> that appeared only after that correction are the async ones (loading / error / empty / populated),
+> which is exactly the axis this phase introduces.
+>
+> Responsive / dark-mode / WCAG are consciously out of scope (see above) and are not unresolved rows.
 
-Applicable state considerations resolved: 10 covered, 1 backstop, 0 unresolved.
+Applicable state considerations: **40** — 33 resolved (explicit), 7 backstop, 0 unresolved.
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| loading | Orb (interactive-control) | ✅ covered | `connecting` state (§1, row 1) renders between tap and session-ready, using the existing `speaking`-family visual at a slower `--beat` — the orb never sits visually frozen during the handshake. |
-| error | Orb (interactive-control) | ✅ covered | Any failure (denied mic, mint failure, ICE failure, missing key) falls silently to scripted mode at the current beat (§5); no error ever renders on the camera-facing stage — only the operator-only status chip. |
-| error | Keyboard affordances (interactive-control) | ✅ covered | `M`/`R`/`Esc`/`→`/`←` all no-op safely with no throw or visible glitch when pressed before any session exists (§7). |
-| overflow | Live caption bubble (static-content) | 🧪 backstop | Owner turns are expected to stay within the existing `640px` bubble's normal reflow for a single 5–30 s beat; no hard clipping/scroll is engineered, verified by rehearsal rather than a code-enforced limit (§2). |
-| long-text | Live caption bubble (static-content) | ✅ covered | Reuses existing `text-wrap: pretty` wrap behaviour unchanged; ASR corrections re-render in place with no transition flicker (§2). |
-| overflow | Agent line (static-content) | ✅ covered | Unchanged from Phase 1 — same script lines, same `680px` max-width, already proven to render at existing lengths. |
-| long-text | Agent line (static-content) | ✅ covered | Same as above — content set is unchanged, only the trigger timing changes (§3). |
-| overflow | Operator teleprompter (nav / static-content) | ✅ covered | Owner's next-line preview truncates to 180 chars + "…" (§4) — explicit rule, not silent clipping. |
-| long-text | Operator teleprompter (nav / static-content) | ✅ covered | Same 180-char truncation rule applies to the long-text case. |
-| zero-one-many | Operator teleprompter beat progress (nav) | ✅ covered | Last beat (G) renders `"— end of script —"` instead of a blank next-line field (§4). |
-| empty | Operator teleprompter (static-content, script load) | ✅ covered | Renders `"Script unavailable"` if `lib/agent-script.ts` fails to provide beats, rather than a blank/crashed panel (§4). |
+### E1 · Voice orb (interactive-control, media, static-content)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| empty | ✅ explicit | Pre-tap, no session ever started: `idle` visual with Frame A's existing copy, unchanged (§1 row 0). |
+| loading | ✅ explicit | `connecting` state (§1 row 1) between tap and session-ready — `live` class with `--beat: 2.2s`, slower than speaking (1.5s) and listening (0.85s) so it reads as "working", not "talking". The orb never sits frozen during the handshake. |
+| error | ✅ explicit | Any failure (mic denied, mint failure, ICE failure, absent key) falls silently to scripted mode at the current beat (§1 row 5 → §5). No error ever renders on the camera-facing stage. |
+| populated | ✅ explicit | Three live states: `speaking` on agent audio, `listening` on owner speech, `idle` + "Your turn — go ahead" in silent gaps (§1 rows 2–4). |
+| overflow | ✅ explicit | Orb is a fixed-size composed element with no text content inside it — nothing can overflow it. Its label sits outside in `.orb-label`. |
+| long-text | 🧪 backstop | `.orb-label` gains two new strings ("Connecting…", "Your turn — go ahead"), both shorter than the existing longest ("Tap the circle, or just start talking"), so the existing layout absorbs them. Verified by eye at 1920×1080 during rehearsal, not enforced in code. |
+
+### E2 · Live caption bubble (media, static-content)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| empty | ✅ explicit | A turn shorter than the ~1.2 s minimum-speech guard discards its buffered transcript and never renders a bubble at all — no one-word flash for a cough or "mm" (§2). |
+| loading | ✅ explicit | No spinner and no skeleton. The blinking `.caret` (existing `qcaret` keyframe) is the in-flight indicator; text appends as ASR deltas arrive, paced by the owner's own speech rather than an artificial cps (§2). |
+| error | ✅ explicit | If `speech_started`/`speech_stopped` fire but no transcript delta ever arrives, the caption region renders nothing and the beat still advances on VAD alone — the transcript is decorative, never gating (SCRIPT-04, §2). |
+| populated | ✅ explicit | Incremental append of transcription deltas; mid-stream ASR corrections re-render in place with no strikethrough, flash, or CSS transition on the text node (a transition on a changing string reads as a stutter). Caret keeps blinking throughout (§2). |
+| overflow | 🧪 backstop | Deliberately not engineered against. The bubble keeps its existing `max-width: 640px` and grows by normal vertical reflow. `overflow`/`line-clamp` is explicitly forbidden here — silently hiding real owner speech is worse on camera than a taller box (§2). Confirmed by rehearsal at the longest scripted turn (Frame B, ~400 chars). |
+| long-text | ✅ explicit | Existing `text-wrap: pretty` wrap behaviour, unchanged (§2). |
+
+### E3 · Agent line (media, static-content)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| empty | ✅ explicit | Never blank. On beat entry the previous content stays visible until the first audio frame, so TTS synthesis latency cannot produce a blank flash (§3). |
+| loading | ✅ explicit | The gap between `response.create` and first audio is covered by holding the previous line; the orb's `connecting`/`speaking` transition carries the "something is happening" signal instead (§1, §3). |
+| error | ✅ explicit | No audio within ~2 s of `response.create` is treated as a dropped session: fall back to scripted mode, which renders `frame.agentLine` immediately via the existing Phase 1 path. The screen is never left blank (§3). |
+| populated | ✅ explicit | Swaps to the beat's exact script string on the first audio frame, in the same tick as the orb's `speaking` transition so text and "mouth open" land together. Reuses the existing `key={agentLine}` remount + `fade 0.5s ease-out` (§3). |
+| overflow | ✅ explicit | Unchanged from Phase 1 — identical strings, identical `680px` max-width, already proven to render. Only the trigger timing changes. |
+| long-text | ✅ explicit | Same as overflow: the content set is fixed and already shipped. |
+
+### E4 · Operator teleprompter (list-collection, static-content) — never camera-facing
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| empty | ✅ explicit | Renders `"Script unavailable"` if `lib/agent-script.ts` yields no beats — never a blank or crashed panel (§4). |
+| loading | 🧪 backstop | Beats are a static local import, so there is no async load to show a state for; the panel renders populated on first paint. If beats ever become async (Phase 5), this needs revisiting. Verified by the panel being present at first paint in rehearsal. |
+| error | ✅ explicit | Same `"Script unavailable"` copy covers a malformed or failed script module (§4). |
+| populated | ✅ explicit | `Beat {n}/{N}` · owner's next line · mic glyph · connection dot, in the deliberately off-brand dark/mono chrome palette (§4). |
+| partial | 🧪 backstop | A beat missing its expected-owner-turn field renders the beat counter and dots normally with an empty line region rather than failing the panel. Not separately specified in §4; treated as a defensive default and confirmed by rehearsal. |
+| overflow | ✅ explicit | Owner's next-line preview truncates at 180 chars + "…", `max-width: 360px` — an explicit rule, not silent clipping. The operator is assumed to have the full script on paper or a second monitor (§4). |
+| zero-one-many | ✅ explicit | At the final beat (G) there is no next line: renders `"— end of script —"` rather than a blank field (§4). |
+| long-text | ✅ explicit | Same 180-char truncation rule (§4). |
+
+### E5 · Connection / fallback status chip (media, static-content) — never camera-facing
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| empty | ✅ explicit | Not rendered at all in the steady connected state — it appears only on a session state *change* (§5). |
+| loading | ✅ explicit | Amber `#f5a623` connection dot during `connecting`; the chip itself does not appear for an ordinary first connect, only for a drop or failure (§4 dot palette, §5). |
+| error | ✅ explicit | Distinct copy per cause: `"Voice dropped — beat {n} continuing in scripted mode · press R to retry"` for a drop, `"Mic permission denied — scripted mode · press R to retry"` for permission, because the operator's fix differs (network vs OS/browser settings) (§5, §6). |
+| populated | ✅ explicit | Dark panel, mono font, non-brand palette — deliberately unlike the on-stage `.hdr-chip` so the operator can never confuse the two (§5). |
+| overflow | 🧪 backstop | Copy strings are fixed and authored; the longest is the mic-denied variant. No dynamic content beyond the beat number. Confirmed by rehearsal rather than a code-enforced width. |
+| long-text | 🧪 backstop | As above — the only interpolated value is `{n}`, a one- or two-digit beat index. |
+
+### E6 · Mic permission flow (interactive-control, media)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| empty | 🧪 backstop | No permission ever requested (page loaded, orb never tapped) is the Phase 1 idle state — indistinguishable from normal, by design. Confirmed by the `?mode=scripted` path being unchanged. |
+| loading | ✅ explicit | `getUserMedia` and the key mint fire concurrently on orb tap; the orb enters `connecting` immediately (§1, §6). |
+| error | ✅ explicit | Denial (or silent rejection of a previously denied origin) surfaces nothing on stage and routes to the fallback with the permission-specific chip copy (§6). |
+| populated | ✅ explicit | Granted permission → connected session → orb proceeds to the live state derivation (§1). |
+| long-text | ✅ explicit | No variable-length content in this flow — copy is the two fixed chip variants. |
+
+### E7 · Keyboard control surface (interactive-control) — no camera-facing affordance
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| loading | ✅ explicit | All five keys must no-op safely when no session is active — e.g. `M` pressed before the orb is ever tapped (§7). |
+| error | ✅ explicit | No throw and no visible glitch on any key in any session state; `R` is itself the error-recovery affordance (§5, §7). |
+| long-text | ✅ explicit | Not applicable — no text content. Recorded rather than dismissed so the row is not mistaken for an oversight. |
+
+### Operational constraints this section surfaces (for Phase 4's recording checklist)
+
+Two rows above resolve to a *rehearsal* obligation rather than code, and will be invisible if they
+are not written into the shoot checklist:
+
+1. **Do one silent orb tap before rolling.** The browser's native permission dialog cannot be
+   suppressed by the component; granting the origin beforehand is the only way it never appears on
+   camera (§6).
+2. **Record at `scale < 1`.** The teleprompter and status chip are anchored in the letterboxed
+   margin outside the scaled stage. At exactly 1920×1080 there is no margin, and the component
+   cannot force one (§4).
 
 ---
 
