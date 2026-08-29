@@ -101,12 +101,6 @@ The agent searches **several merchants**, then the shopper buys from **Bizgram**
 
 Paid subtotal $2,822 · held $1,049 · fees $59.26 · payout $2,762.74. **These add up — keep them adding up.**
 
-### Agent activity note
-
-> Eight of nine sales today started in a Pluto chat. The student promo was applied twice. Two shoppers asked for an Acer Nitro V — we don't carry it, and both dropped off.
-
-The lost sale is the point. It is the one insight an ordinary payments dashboard could never produce.
-
 ### Order detail (10:12, for the click-through panel)
 
 ASUS Vivobook 15 (X1504VA) · $849 · −$50 student promo · Pluto chat
@@ -130,4 +124,4 @@ These appear in the repo and must be replaced. **Ah Seng Electronics**, **Hock S
 ## 7. Open
 
 - **Attribution.** We are using a real, named, identifiable business — its address, hours and contact — in a public DevPost video, with invented owner dialogue, prices and sales around it. Worth a message to Bizgram for a nod, or a visible on-screen line that the shop data is public information and the transactions are simulated. Team's call; flagging it once.
-- The one-outlet decision removes the inter-outlet transfer story from the dashboard. The lost-sale note replaces it.
+- The one-outlet decision removed the inter-outlet transfer story from the dashboard, and the agent-activity note has been dropped as well. The dashboard now shows figures and the payments feed only.
