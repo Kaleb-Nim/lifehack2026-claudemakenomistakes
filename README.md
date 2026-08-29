@@ -2,6 +2,33 @@
 
 NUS SOC 24h hackathon: https://lifehack2026.nuscomputing.com/
 
+## Problem Statement — Conversational Commerce Agents (Visa)
+
+> How might we enable small to mid sized merchants to deploy **pre-built, category-trained AI commerce agents** on their platforms, with no code, so customers **discover, decide, and complete a purchase** without leaving the chat — powered by Visa's Payments Stack?
+
+**Background (from Visa's briefing deck):**
+
+1. **The Problem** — Online shopping is fragmented, and many SMEs lack the resources to deliver intelligent, seamless commerce and payments.
+2. **The Opportunity** — AI agents can unite product discovery, decision-making, and payment in one conversational journey.
+3. **Visa's Role** — Visa can power secure transactions, enabling commerce using AI agents to deliver end-to-end commerce.
+
+**Expected submission (4 pillars):**
+
+1. **AI Agent Layer**
+   - Chatbot or voice assistant trained for one category (food, fashion, electronics, travel, etc.)
+   - Handles discovery, recommendations, comparison, and purchase decision
+2. **Merchant access**
+   - No-code/low-code way for merchants to go live (upload catalog, connect APIs)
+   - Works for both a single-location SME and a multi-location retailer
+3. **Seamless payment**
+   - Simulated Visa payment flow
+   - Checkout completes inside the conversation, no redirects
+4. **Trust, Consent and Transparency**
+   - Show how users authorize agent-driven actions (e.g., confirming purchases)
+   - Include safeguards: transaction previews, identity verification, confirmation before agent transacts
+
+Full notes: [`docs/problem-statement.md`](docs/problem-statement.md) · Slide scans: [`docs/problem-statement.pdf`](docs/problem-statement.pdf)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
