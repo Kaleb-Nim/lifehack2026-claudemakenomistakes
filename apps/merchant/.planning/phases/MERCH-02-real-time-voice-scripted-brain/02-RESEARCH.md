@@ -74,7 +74,16 @@ Under `audio.input.turn_detection`:
 
 **Use `server_vad`, not `semantic_vad`.** Semantic VAD decides when the owner is *semantically* finished, which is exactly the non-determinism this phase is built to avoid. With `server_vad`, raise `silence_duration_ms` above the 500 default (~800–1000) so a mid-sentence breath on camera cannot trigger the next beat.
 
-**Critical:** set `create_response: false` (or `turn_detection.create_response` off) so VAD stop does **not** auto-generate a response. The beat runner must be the only thing that issues `response.create` — otherwise the model answers the owner freely and the take is lost. Verify the exact key placement against the docs when writing the config; this single flag is what makes the scripted brain possible.
+**Critical — and now VERIFIED (2026-08-29).** Set BOTH on `turn_detection`:
+
+```
+create_response: false      // no auto-response on VAD stop
+interrupt_response: false   // no auto-cancel of an in-flight response on VAD start
+```
+
+The docs state it explicitly: *"If both `create_response` and `interrupt_response` are disabled, the model will not respond automatically, though VAD events will still be emitted."* That is exactly the scripted-brain contract — the beat runner becomes the only thing that ever issues `response.create`, while `speech_started` / `speech_stopped` keep firing so beats can still advance on the owner's real speech. Both fields are documented on `server_vad`, not only `semantic_vad`.
+
+`interrupt_response: false` matters as much as `create_response: false`: without it, the owner speaking over the agent's scripted line would cancel that line mid-sentence.
 
 ### Input transcription (VOICE-03)
 
@@ -111,7 +120,8 @@ Per CONTEXT.md the client fires the handlers directly on beat entry; registering
 <risks>
 ## Risks and unknowns
 
-- **`create_response` placement.** The docs show `create_response` documented under `SemanticVad`; confirm the equivalent for `server_vad` before relying on it. If server VAD cannot suppress auto-response, the fallback is `turn_detection: null` (fully manual) and driving beat advance from `input_audio_buffer.speech_stopped` — which still fires — or from the operator key. **Plan for this fallback; do not discover it on shoot day.**
+- ~~`create_response` placement / whether server VAD can suppress auto-response.~~ **Resolved 2026-08-29** — both `create_response` and `interrupt_response` are documented on `server_vad` and, set to `false` together, suppress automatic responses while still emitting VAD events. The `turn_detection: null` fallback is no longer needed; keep it only as a contingency if the deployed model ignores the flags.
+- **`idle_timeout_ms` must be left unset.** It is `server_vad`-only and auto-triggers a model response after a period of silence following the last audio. On a scripted take there are long deliberate silences (waiting on a pill tap or an operator key), so leaving this set would reintroduce exactly the spontaneous responses `create_response: false` was set to prevent.
 - **Ephemeral key lifetime vs take length.** A 600 s secret covers a 2-minute take comfortably, but the secret authorises the *initial* SDP exchange; a mid-take reconnect needs a fresh mint. The route handler must be callable more than once per page load.
 - ~~`.env.local`'s spaced `OPENAI_API_KEY = "sk-…"` may not parse.~~ **Resolved 2026-08-29** — dotenv's line regex is `\s*=\s*` and strips surrounding quotes, so the existing file parses correctly. No normalisation needed. Still add `.env.example` documenting `OPENAI_API_KEY`, `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_VOICE` (VOICE-01).
 - **Browser autoplay policy.** The remote audio element will not play until a user gesture. The orb tap (State A) is that gesture — it must both request the mic and unblock audio, or the agent connects and is silent.
