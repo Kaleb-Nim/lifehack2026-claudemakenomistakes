@@ -26,6 +26,14 @@ export interface OnboardingState {
   logDelay: (l: LogLine) => number;
   isOpen: (c: Card) => boolean;
   toggle: (c: Card) => void;
+  /**
+   * Registers the `R` key's handler (the beat runner's `repeat()`), or clears it with
+   * `null`. The onboarding hook owns the keyboard effect but has no session of its own to
+   * act on, so the caller (components/Onboarding.tsx, which does hold the voice driver)
+   * hands the callback in via a ref rather than the hook taking a voice dependency —
+   * pressing `R` before any handler is registered no-ops safely.
+   */
+  setRepeatHandler: (fn: (() => void) | null) => void;
 }
 
 export function useOnboardingState(): OnboardingState {
@@ -78,11 +86,20 @@ export function useOnboardingState(): OnboardingState {
     router.replace(`?${q.toString()}`);
   }, [params, router]);
 
+  // `R` re-prompts a stalled live agent (or reconnects a dropped session first) — set by
+  // components/Onboarding.tsx once the voice driver exists. Absent (page just loaded, or
+  // voice never mounted), the keydown branch below no-ops.
+  const repeatHandlerRef = useRef<(() => void) | null>(null);
+  const setRepeatHandler = useCallback((fn: (() => void) | null) => {
+    repeatHandlerRef.current = fn;
+  }, []);
+
   // Keyboard navigation for recording.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); go(idx + 1); }
       if (e.key === "ArrowLeft") { e.preventDefault(); go(idx - 1); }
+      if (e.key === "r" || e.key === "R") { e.preventDefault(); repeatHandlerRef.current?.(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -116,5 +133,5 @@ export function useOnboardingState(): OnboardingState {
   const isOpen = (c: Card) => openOverride[c.file] ?? (!!c.open && !reading.has(c.file));
   const toggle = (c: Card) => setOpenOverride((o) => ({ ...o, [c.file]: !isOpen(c) }));
 
-  return { idx, frame, prev, live, setLive, reading, openOverride, over, setOver, scale, go, logDelay, isOpen, toggle };
+  return { idx, frame, prev, live, setLive, reading, openOverride, over, setOver, scale, go, logDelay, isOpen, toggle, setRepeatHandler };
 }

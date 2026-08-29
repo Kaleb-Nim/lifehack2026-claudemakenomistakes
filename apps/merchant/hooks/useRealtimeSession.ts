@@ -30,6 +30,12 @@ export interface RealtimeSessionApi {
   disconnect: (failure?: SessionFailure) => void;
   send: (event: RealtimeEvent) => void;
   toggleMute: () => void;
+  /**
+   * The last EVENT_LOG_MAX raw server events, newest last, for operator debugging (plan
+   * 02-03's status chip). A ref, not state — mutated in place so a fast event stream never
+   * forces a re-render; nothing on stage reads this.
+   */
+  events: RefObject<RealtimeEvent[]>;
 }
 
 export interface UseRealtimeSessionOptions {
@@ -38,6 +44,7 @@ export interface UseRealtimeSessionOptions {
 }
 
 const CALLS_URL = "https://api.openai.com/v1/realtime/calls";
+const EVENT_LOG_MAX = 50;
 
 function isPermissionError(err: unknown): boolean {
   return err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError" || err.name === "SecurityError");
@@ -64,6 +71,7 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
   useEffect(() => {
     onEventRef.current = opts.onEvent;
   });
+  const eventsRef = useRef<RealtimeEvent[]>([]);
 
   const teardown = useCallback(() => {
     if (dcRef.current) { dcRef.current.onmessage = null; dcRef.current.onclose = null; dcRef.current.close(); }
@@ -90,6 +98,8 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
     } catch {
       return;
     }
+    eventsRef.current.push(event);
+    if (eventsRef.current.length > EVENT_LOG_MAX) eventsRef.current.shift();
     if (event.type === "output_audio_buffer.started") setSpeaking(true);
     if (event.type === "output_audio_buffer.stopped" || event.type === "output_audio_buffer.cleared") setSpeaking(false);
     if (event.type === "input_audio_buffer.speech_started") setHearing(true);
@@ -241,5 +251,5 @@ export function useRealtimeSession(audioRef: RefObject<HTMLAudioElement | null>,
 
   useEffect(() => teardown, [teardown]);
 
-  return { phase, failure, muted, speaking, hearing, connect, disconnect, send, toggleMute };
+  return { phase, failure, muted, speaking, hearing, connect, disconnect, send, toggleMute, events: eventsRef };
 }

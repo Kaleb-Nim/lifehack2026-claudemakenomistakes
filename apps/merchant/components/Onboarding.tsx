@@ -57,12 +57,18 @@ function useTypewriter(text: string | undefined, cps = 28) {
 }
 
 export default function Onboarding() {
-  const { idx, frame, prev, live, setLive, reading, over, setOver, scale, go, logDelay, isOpen, toggle } = useOnboardingState();
+  const { idx, frame, prev, live, setLive, reading, over, setOver, scale, go, logDelay, isOpen, toggle, setRepeatHandler } = useOnboardingState();
   // ?mode=scripted skips the session entirely (CONTEXT.md) — the backup recording path for
   // shoot day, so tapping the orb here must never attempt a mic/key/WebRTC handshake.
   const scriptedMode = useSearchParams().get("mode") === "scripted";
   const audioRef = useRef<HTMLAudioElement>(null);
   const voice = useBeatRunner({ idx, frame, go }, audioRef);
+  // Hand the `R` key's handler to useOnboardingState's keyboard effect, which has no voice
+  // driver of its own to call.
+  useEffect(() => {
+    setRepeatHandler(voice.repeat);
+    return () => setRepeatHandler(null);
+  }, [voice.repeat, setRepeatHandler]);
   const voiceConnecting = voice.phase === "connecting";
   const voiceSpeaking = voice.phase === "live" && voice.speaking;
   const voiceHearing = voice.phase === "live" && voice.hearing;
@@ -83,7 +89,7 @@ export default function Onboarding() {
     : voiceHearing ? "Listening to you"
     : voice.phase === "live" ? "Your turn — go ahead"
     : live ? "Speaking" : typing ? "Listening to you" : frame.orbLabel;
-  const agentLine = live ? LIVE_LINE : (voice.agentLine ?? frame.agentLine);
+  const agentLine = live ? LIVE_LINE : frame.agentLine;
   const header = live ? "Live" : frame.header;
 
   // Drop bar → simulate the uploads landing (jump to State C from A/B).

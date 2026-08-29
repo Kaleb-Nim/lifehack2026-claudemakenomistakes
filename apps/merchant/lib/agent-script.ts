@@ -1,11 +1,13 @@
-// The scripted "brain" for the merchant onboarding voice agent.
-// Content here is SCRIPTED per .planning/phases/MERCH-02-real-time-voice-scripted-brain/02-CONTEXT.md
-// ("Determinism" decisions) — every agent line is spoken verbatim via a per-beat
-// `response.create` instruction (see lib/beat-runner.ts), never improvised by the model.
-// The seven tool names below are fixed by SCRIPT-03 and must not be renamed.
-// This file imports from lib/merchant-data.ts and never the reverse — merchant-data.ts
-// stays additive-only; agentLine/log/card copy there is the single source of truth for
-// on-screen and spoken text.
+// The "brain" behind the merchant onboarding voice agent's screen, not its words.
+// Per .planning/phases/MERCH-02-real-time-voice-scripted-brain/02-02-PLAN.md, the agent's
+// spoken content is now a live, context-biased conversation driven by the session
+// `instructions` in app/api/realtime/session/route.ts (the contents of lib/agent-context.md)
+// — never a fixed line spoken word for word from this file. What lives here is the SCRIPTED screen: which
+// frame each beat maps to, what advances past it, and the canned tool calls that drive the
+// hardcoded log/cards/pills. The seven tool names below are fixed by SCRIPT-03 and must not
+// be renamed. This file imports from lib/merchant-data.ts and never the reverse —
+// merchant-data.ts stays additive-only; agentLine/log/card copy there is the single source
+// of truth for on-screen text.
 
 import { FRAMES } from "./merchant-data";
 
@@ -41,7 +43,11 @@ export interface BeatToolCall {
 export interface Beat {
   /** Aligned 1:1 with Frame["key"] so the runner can zip beats to frames by key, not index. */
   key: string;
-  /** The exact line spoken via `response.instructions` — never the model's own transcript. */
+  /**
+   * Retained only for 02-01/02-02 Task 1's single wired beat; unused for speech since the
+   * context-bias switch (the model now improvises within lib/agent-context.md). Dropped from
+   * this type entirely in 02-02 Task 3, once the full beat table replaces it with `ownerCue`.
+   */
   line: string;
   /** The owner's expected next turn, shown on the operator teleprompter (plan 02-03). */
   ownerCue?: string;
@@ -145,11 +151,6 @@ export function beatIndexOf(key: string): number {
   return BEATS.findIndex((b) => b.key === key);
 }
 
-/** Builds the "say this exactly" `response.instructions` string (02-RESEARCH.md "SCRIPT-02"). */
-export function verbatim(line: string): string {
-  return `Say this exactly, word for word, and nothing else: ${line}`;
-}
-
 // ── Server VAD config — the single source of truth ──────────────────────────
 // app/api/realtime/session/route.ts sends this to OpenAI; lib/beat-runner.ts subtracts
 // SILENCE_DURATION_MS below when measuring how long the owner actually spoke. If these
@@ -169,7 +170,13 @@ export const TURN_DETECTION = {
 };
 
 // ── Beat-advance timing constants ───────────────────────────────────────────
-export const MIN_SPEECH_MS = 1200; // a cough or an "mm" cannot advance a take
+// Two different questions, two different thresholds — both measured over the same
+// corrected span (wall-clock between the VAD events minus VAD_SILENCE_DURATION_MS above):
+// MIN_REPLY_MS gates whether the owner's turn earns a spoken reply at all (a cough should
+// not); MIN_SPEECH_MS additionally gates whether that turn is enough to advance the take (a
+// short "ya lah" should be answered without moving the frame). MIN_SPEECH_MS > MIN_REPLY_MS.
+export const MIN_REPLY_MS = 400;   // below this, the turn was a cough — no reply, no advance
+export const MIN_SPEECH_MS = 1200; // below this, the frame does not advance (still gets a reply)
 export const SETTLE_MS = 400;      // pause before the agent's next line starts
 export const AUDIO_TIMEOUT_MS = 2000; // no audio within this window of response.create = dropped session
 

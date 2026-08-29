@@ -1,21 +1,22 @@
 "use client";
 
 // Joins hooks/useRealtimeSession.ts (transport) to lib/agent-script.ts (beat table) so a
-// live Realtime session speaks the scripted line for a beat, fires that beat's canned tool
+// live Realtime session replies to the owner's own turns, fires each beat's canned tool
 // handlers on the owner's real speech, and uses the handler's return value — never a
 // timer — to advance the onboarding page a frame (CONTEXT.md: "Snapshot-first, not a
 // reducer rewrite").
 //
-// Scope for this plan (02-01): exactly ONE beat is driven end to end (BEATS[0], "A"). The
-// runner enters it once on connect, issues its one `response.create`, and on a real
-// speech_stopped past MIN_SPEECH_MS fires its tools and advances the page. Progressing the
-// runner's OWN beat cursor into subsequent beats (so they also get spoken) is plan 02-02's
-// "full beat progression" — deliberately not wired here, so this plan's single response.create
-// stays observably singular.
+// The agent's WORDS are no longer decided here — the session config sent at mint time (the
+// contents of lib/agent-context.md, read server-side per mint) carries the whole context
+// bias, and the model answers freely inside it. This module's only job is turn-taking: open
+// the conversation once the session goes live, then answer again on every qualified owner
+// turn — never more than one response in flight at once — while a separate, independent
+// threshold decides whether that same turn is also long enough to move the take to the next
+// frame. See 02-02-PLAN.md Task 2 for the full guard rationale.
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { useRealtimeSession, type RealtimeEvent, type SessionFailure, type SessionPhase } from "../hooks/useRealtimeSession";
-import { AUDIO_TIMEOUT_MS, BEATS, ECHO_GRACE_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, verbatim, type Beat } from "./agent-script";
+import { AUDIO_TIMEOUT_MS, BEATS, ECHO_GRACE_MS, MIN_REPLY_MS, MIN_SPEECH_MS, SETTLE_MS, TOOL_HANDLERS, VAD_SILENCE_DURATION_MS, type Beat } from "./agent-script";
 
 /** The slice of useOnboardingState() the runner needs — kept structural, not imported, to avoid coupling this module to the hook's full surface. */
 export interface BeatRunnerOnboarding {
@@ -31,12 +32,12 @@ export interface BeatRunnerApi {
   hearing: boolean;
   connect: () => void;
   /**
-   * The current beat's exact script line, set the moment its audio actually starts
-   * (never at beat-entry, never the model's own transcript — UI-SPEC §3). `null`
-   * before the first beat's audio has arrived, or after a drop — the caller falls
-   * back to `frame.agentLine` in both cases.
+   * Operator override (key `R`, wired from hooks/useOnboardingState.ts): nudges a stalled
+   * agent to speak again with a fresh bare reply, or — if the session has dropped —
+   * re-attempts the connection first. Always safe to call, including with no session ever
+   * started; it no-ops rather than throwing.
    */
-  agentLine: string | null;
+  repeat: () => void;
 }
 
 /**
@@ -46,7 +47,6 @@ export interface BeatRunnerApi {
  * `.phase` as an unsafe render-time ref access.
  */
 export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObject<HTMLAudioElement | null>): BeatRunnerApi {
-  const [agentLine, setAgentLine] = useState<string | null>(null);
   const currentBeatRef = useRef<Beat | null>(null);
   const firedToolsRef = useRef<Set<string>>(new Set());
   const speechStartedAtRef = useRef<number | null>(null);
@@ -55,11 +55,24 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   const agentSpeakingRef = useRef(false);
   /** When the agent's audio last stopped — inbound speech within ECHO_GRACE_MS of this is the agent's own tail. */
   const agentStoppedAtRef = useRef(0);
+  /** True between a `response.created` and its matching `response.done` — a second reply is suppressed while this is true, silently, so a rejected turn is never dead air. */
+  const activeResponseRef = useRef(false);
   const audioTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onboardingRef = useRef(onboarding);
   useEffect(() => {
     onboardingRef.current = onboarding;
   });
+
+  // session.send / session.disconnect are needed inside handleEvent, but handleEvent is
+  // itself the callback passed to useRealtimeSession() below — mirrored through refs (kept
+  // current by a no-dependency effect, same idiom as onboardingRef above) rather than
+  // closed over directly, which would be a circular reference. session.phase / .connect are
+  // mirrored the same way so `repeat` below never needs the whole session object (returned
+  // fresh every render) in its dependency array.
+  const sendRef = useRef<(event: RealtimeEvent) => void>(() => {});
+  const disconnectRef = useRef<(failure?: SessionFailure) => void>(() => {});
+  const phaseRef = useRef<SessionPhase>("idle");
+  const connectRef = useRef<() => void>(() => {});
 
   const fireTools = useCallback((beat: Beat): boolean => {
     if (firedToolsRef.current.has(beat.key)) return false; // already fired — never fire twice
@@ -76,29 +89,33 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     return allOk;
   }, []);
 
-  const enterBeat = useCallback((
-    beat: Beat,
-    send: (event: RealtimeEvent) => void,
-    disconnect: (failure?: SessionFailure) => void,
-  ) => {
-    currentBeatRef.current = beat;
+  /**
+   * The sole place a bare reply is requested. Silently suppressed while a response is
+   * already in flight — the API would reject a second one, and a rejected turn is dead air
+   * on camera, so suppression must never surface an error or consume the turn's advance.
+   */
+  const sendResponseCreate = useCallback(() => {
+    if (activeResponseRef.current) return;
     audioArrivedRef.current = false;
-    send({
-      type: "response.create",
-      response: { instructions: verbatim(beat.line), metadata: { beat: beat.key }, conversation: "none" },
-    });
+    sendRef.current({ type: "response.create", response: {} });
     if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
     audioTimeoutRef.current = setTimeout(() => {
-      if (!audioArrivedRef.current) disconnect("dropped");
+      if (!audioArrivedRef.current) disconnectRef.current("dropped");
     }, AUDIO_TIMEOUT_MS);
   }, []);
 
   const handleEvent = useCallback((event: RealtimeEvent) => {
+    if (event.type === "response.created") {
+      activeResponseRef.current = true;
+    }
+    if (event.type === "response.done") {
+      activeResponseRef.current = false;
+    }
+
     if (event.type === "output_audio_buffer.started") {
       audioArrivedRef.current = true;
       agentSpeakingRef.current = true;
       if (audioTimeoutRef.current) { clearTimeout(audioTimeoutRef.current); audioTimeoutRef.current = null; }
-      setAgentLine(currentBeatRef.current?.line ?? null);
     }
 
     if (event.type === "output_audio_buffer.stopped" || event.type === "output_audio_buffer.cleared") {
@@ -128,10 +145,14 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
 
       // Server VAD only emits speech_stopped after silence_duration_ms of quiet, so the
       // wall-clock span between the two events over-reports the real speech by that much.
-      // Subtracting it is what makes MIN_SPEECH_MS mean what it says: without this a 400ms
-      // cough measures ~1300ms and clears a 1200ms guard that was meant to reject it.
+      // Subtracting it is what makes both thresholds below mean what they say.
       const spokenMs = Date.now() - startedAt - VAD_SILENCE_DURATION_MS;
-      if (spokenMs < MIN_SPEECH_MS) return; // a cough or an "mm" cannot advance a take
+      if (spokenMs < MIN_REPLY_MS) return; // a cough or an "mm" — no reply, no advance
+
+      // Replying and advancing are separate questions. Every qualifying turn gets a
+      // response; only a turn past MIN_SPEECH_MS also moves the take.
+      sendResponseCreate();
+      if (spokenMs < MIN_SPEECH_MS) return; // answered, but too short to advance the frame
 
       const beat = currentBeatRef.current;
       if (!beat || beat.advanceOn !== "speech_stopped") return;
@@ -141,28 +162,38 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
         if (fireTools(beat)) go(idx + 1);
       }, SETTLE_MS);
     }
-  }, [fireTools]);
+  }, [fireTools, sendResponseCreate]);
 
   const session = useRealtimeSession(audioRef, { onEvent: handleEvent });
 
-  // Enter the first beat exactly once, the moment the session goes live. Subsequent
-  // frame changes (driven by go() above) do not re-enter a beat in this plan's scope.
+  useEffect(() => {
+    sendRef.current = session.send;
+    disconnectRef.current = session.disconnect;
+    phaseRef.current = session.phase;
+    connectRef.current = session.connect;
+  });
+
+  // Enter the first beat and open the conversation exactly once, the moment the session
+  // goes live — a bare reply, not a scripted line; the session config sent at mint time is
+  // what does the talking.
   useEffect(() => {
     if (session.phase === "live" && currentBeatRef.current === null) {
-      enterBeat(BEATS[0], session.send, session.disconnect);
+      currentBeatRef.current = BEATS[0];
+      sendResponseCreate();
     }
-  }, [session.phase, session.send, session.disconnect, enterBeat]);
+  }, [session.phase, sendResponseCreate]);
 
   useEffect(() => () => {
     if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
   }, []);
 
-  // A drop falls back to frame.agentLine immediately (UI-SPEC §3) — never show a stale
-  // spoken line once the session is no longer live. Adjusted during render (React's own
-  // "adjusting state when a prop changes" pattern), not from inside an effect.
-  if (session.phase !== "live" && agentLine !== null) {
-    setAgentLine(null);
-  }
+  const repeat = useCallback(() => {
+    if (phaseRef.current !== "live") {
+      connectRef.current();
+      return;
+    }
+    sendResponseCreate();
+  }, [sendResponseCreate]);
 
   return {
     phase: session.phase,
@@ -170,6 +201,6 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
     speaking: session.speaking,
     hearing: session.hearing,
     connect: session.connect,
-    agentLine,
+    repeat,
   };
 }
