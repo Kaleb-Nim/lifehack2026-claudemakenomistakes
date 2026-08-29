@@ -11,7 +11,7 @@ Bun workspaces. **The root is context only** (`docs/`, `.planning/`, this file) 
 - `apps/merchant/` — merchant onboarding web page, Next.js 16 App Router + Tailwind v4. Kaleb's half. Layout comes from the Claude Design project "Merchant voice agent onboarding" (`Merchant Onboarding v3.dc.html` → `FrameQuiet2`); copy comes from `docs/merchant-page-design-brief.md` and is final. Demo content lives in `apps/merchant/lib/merchant-data.ts`.
 - `apps/consumer-bot/` — consumer Telegram bot, **Python** (`python-telegram-bot`), deterministic shopper flow with simulated Visa checkout. The consumer pair's half; it has its own `AGENTS.md` and README (venv, ruff, unittest). Was `consumer_bot/` at the root until 2026-08-29.
 - Run: `bun run dev:merchant` from root for the web page; `python bot.py` inside `apps/consumer-bot` for the bot. JS side uses `bun`, never npm/node.
-- GSD: `.planning/` is the roadmap/state; `/gsd-progress` to see where we are.
+- GSD is per app: the merchant page's roadmap/state is `apps/merchant/.planning/` (run `/gsd-progress` from `apps/merchant`). There is no root-level `.planning/`.
 
 
 # Hackathon context

@@ -11,7 +11,7 @@ This is a Bun-workspaces monorepo. **The root holds context only** — no app co
 | `apps/merchant/` | Merchant onboarding web page (Next.js 16). One conversational screen, states A–G, fully hardcoded for the demo video. |
 | `apps/consumer-bot/` | Consumer Telegram bot (Python, python-telegram-bot). Deterministic shopper flow with in-chat simulated Visa checkout; see its README for venv setup. |
 | `docs/` | Problem statement, mentor notes, team decisions, design brief, demo shooting script. |
-| `.planning/` | GSD project files (PROJECT / REQUIREMENTS / ROADMAP / STATE). |
+| `apps/merchant/.planning/` | GSD project files for the merchant page (PROJECT / REQUIREMENTS / ROADMAP / STATE). |
 | `AGENTS.md` | Working rules for AI agents in this repo (read first). |
 
 ## Run

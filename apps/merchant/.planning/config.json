@@ -58,7 +58,7 @@
   "hooks": {
     "context_warnings": true
   },
-  "project_code": "LH26",
+  "project_code": "MERCH",
   "agent_skills": {},
   "claude_md_path": "./AGENTS.md"
 }
