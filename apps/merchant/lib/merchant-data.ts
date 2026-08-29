@@ -40,7 +40,9 @@ export interface Frame {
 }
 
 export const SHOP_NAME = "Bizgram Asia";
-export const PRODUCT_NAME = "[PRODUCT NAME]";
+// docs/CANONICAL-DEMO-DATA.md §1: "Pluto. Everywhere, including the agent's own voice.
+// Never `[PRODUCT NAME]`, never any other spelling."
+export const PRODUCT_NAME = "Pluto";
 
 const ok = (text: string): LogLine => ({ mark: "ok", text });
 const q = (text: string): LogLine => ({ mark: "q", text });
