@@ -60,7 +60,9 @@ WITH lexical AS (
     WHERE id @@@ paradedb.disjunction_max(disjuncts => ARRAY[
               paradedb.match('title', %(query)s),
               paradedb.match('description', %(query)s),
-              paradedb.match('category', %(query)s)
+              paradedb.match('category', %(query)s),
+              paradedb.match('product_type', %(query)s),
+              paradedb.match('vendor', %(query)s)
           ])
       AND (%(max_price)s::numeric IS NULL OR price_min <= %(max_price)s::numeric)
     LIMIT {CANDIDATE_POOL}
@@ -105,7 +107,9 @@ FROM public.catalog_products p
 WHERE p.id @@@ paradedb.disjunction_max(disjuncts => ARRAY[
           paradedb.match('title', %(query)s),
           paradedb.match('description', %(query)s),
-          paradedb.match('category', %(query)s)
+          paradedb.match('category', %(query)s),
+          paradedb.match('product_type', %(query)s),
+          paradedb.match('vendor', %(query)s)
       ])
   AND (%(max_price)s::numeric IS NULL OR p.price_min <= %(max_price)s::numeric)
 ORDER BY rrf_score DESC, p.price_min ASC
