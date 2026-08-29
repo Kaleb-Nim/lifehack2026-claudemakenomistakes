@@ -6,16 +6,15 @@
 //   →/Space next state · ← previous · ?state=C deep-link · ?auto=1 runs the demo-script timing sheet
 //   The two pill questions, the drop bar buttons and Go live are the only pointer interactions.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
-  FRAMES, HERO, LIVE_LINE, PRODUCTS, PRODUCT_NAME, SHOP_NAME,
-  type Card, type Frame, type LogLine,
+  HERO, LIVE_LINE, PRODUCTS, PRODUCT_NAME, SHOP_NAME,
+  type LogLine,
 } from "../lib/merchant-data";
-
-const LOG_STAGGER_MS = 600;   // brief §6: log lines appear one at a time ~0.6 s apart
-const CARD_READ_MS = 4000;    // brief §6: card `reading…` ≈ 4 s
-const CARD_STAGGER_MS = 1500; // uploads land one after another
+import { CARD_STAGGER_MS } from "../lib/frame-timing";
+import { useOnboardingState } from "../hooks/useOnboardingState";
+import { useBeatRunner } from "../lib/beat-runner";
 
 const MARK: Record<LogLine["mark"], string> = { ok: "✓", q: "?", flag: "!", struck: "✓" };
 
@@ -35,96 +34,57 @@ const TYPE = ["M4 7V5h16v2", "M9 19h6", "M12 5v14"];
 
 // ── Typewriter for the owner's live caption ─────────────────────────────────
 function useTypewriter(text: string | undefined, cps = 28) {
-  const [n, setN] = useState(0);
+  const [state, setState] = useState<{ text: string | undefined; n: number }>({ text, n: 0 });
+
+  // Adjust state during render when `text` changes, rather than resetting the
+  // counter from inside an effect (avoids react-hooks/set-state-in-effect —
+  // this is React's own documented pattern for "adjusting state when a prop
+  // changes": https://react.dev/learn/you-might-not-need-an-effect).
+  if (state.text !== text) {
+    setState({ text, n: 0 });
+  }
+
   useEffect(() => {
-    setN(0);
     if (!text) return;
-    const id = setInterval(() => setN((k) => (k >= text.length ? (clearInterval(id), k) : k + 1)), 1000 / cps);
+    const id = setInterval(
+      () => setState((s) => (s.n >= text.length ? (clearInterval(id), s) : { ...s, n: s.n + 1 })),
+      1000 / cps,
+    );
     return () => clearInterval(id);
   }, [text, cps]);
-  return text ? text.slice(0, n) : "";
+
+  return text ? text.slice(0, state.n) : "";
 }
 
 export default function Onboarding() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const auto = params.get("auto") === "1";
-  const initial = Math.max(0, FRAMES.findIndex((f) => f.key === (params.get("state") ?? "A").toUpperCase()));
-
-  const [idx, setIdx] = useState(initial);
-  const [live, setLive] = useState(false);
-  const [reading, setReading] = useState<Set<string>>(new Set());
-  const [openOverride, setOpenOverride] = useState<Record<string, boolean>>({});
-  const [over, setOver] = useState(false);
-  const [scale, setScale] = useState(1);
-  const prevIdx = useRef(idx);
-
-  const frame: Frame = FRAMES[idx];
-  const prev: Frame | undefined = FRAMES[prevIdx.current];
-
-  // Fit the 1920×1080 stage to the window (recording target is 1:1 at 1080p).
-  useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080));
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, []);
-
-  const go = useCallback((next: number) => {
-    const clamped = Math.max(0, Math.min(FRAMES.length - 1, next));
-    prevIdx.current = idx;
-    setIdx(clamped);
-    setLive(false);
-    setOpenOverride({});
-    const q = new URLSearchParams(params.toString());
-    q.set("state", FRAMES[clamped].key);
-    router.replace(`?${q.toString()}`);
-  }, [idx, params, router]);
-
-  // Keyboard navigation for recording.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); go(idx + 1); }
-      if (e.key === "ArrowLeft") { e.preventDefault(); go(idx - 1); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [idx, go]);
-
-  // ?auto=1 — advance on the timing sheet.
-  useEffect(() => {
-    if (!auto || idx >= FRAMES.length - 1) return;
-    const t = setTimeout(() => go(idx + 1), frame.seconds * 1000);
-    return () => clearTimeout(t);
-  }, [auto, idx, frame.seconds, go]);
-
-  // Cards new to this frame start in `reading…` and flip after ~4 s, landing one after another.
-  useEffect(() => {
-    const before = new Set((prev?.cards ?? []).map((c) => c.file));
-    const fresh = frame.cards.filter((c) => !before.has(c.file)).map((c) => c.file);
-    if (!fresh.length || prevIdx.current > idx) { setReading(new Set()); return; }
-    setReading(new Set(fresh));
-    const timers = fresh.map((file, i) =>
-      setTimeout(() => setReading((s) => { const n = new Set(s); n.delete(file); return n; }), CARD_READ_MS + i * CARD_STAGGER_MS),
-    );
-    return () => timers.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx]);
-
-  // Log lines new to this frame rise in one at a time.
-  const prevTexts = useMemo(() => new Set((prev?.log ?? []).map((l) => l.text + l.mark)), [prev]);
-  let newCount = 0;
-  const logDelay = (l: LogLine) => (prevTexts.has(l.text + l.mark) ? 0 : (newCount++) * LOG_STAGGER_MS);
+  const { idx, frame, prev, live, setLive, reading, over, setOver, scale, go, logDelay, isOpen, toggle } = useOnboardingState();
+  // ?mode=scripted skips the session entirely (CONTEXT.md) — the backup recording path for
+  // shoot day, so tapping the orb here must never attempt a mic/key/WebRTC handshake.
+  const scriptedMode = useSearchParams().get("mode") === "scripted";
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const voice = useBeatRunner({ idx, frame, go }, audioRef);
+  const voiceConnecting = voice.phase === "connecting";
+  const voiceSpeaking = voice.phase === "live" && voice.speaking;
+  const voiceHearing = voice.phase === "live" && voice.hearing;
+  const voiceActive = voiceConnecting || voice.phase === "live";
 
   const caption = useTypewriter(frame.caption);
   const typing = !!frame.caption && caption.length < frame.caption.length;
-  const orbState = live ? "speaking" : typing ? "listening" : frame.orb;
-  const orbLabel = live ? "Speaking" : typing ? "Listening to you" : frame.orbLabel;
-  const agentLine = live ? LIVE_LINE : frame.agentLine;
+  // Real session states take priority; a session that never started (idle) or that
+  // dropped back to scripted mode falls through to the exact Phase 1 derivation
+  // (UI-SPEC §1, priority table row 5) — one chain, no parallel orb-state variable.
+  const orbState = voiceConnecting ? "connecting"
+    : voiceSpeaking ? "speaking"
+    : voiceHearing ? "listening"
+    : voice.phase === "live" ? "idle"
+    : live ? "speaking" : typing ? "listening" : frame.orb;
+  const orbLabel = voiceConnecting ? "Connecting…"
+    : voiceSpeaking ? "Speaking"
+    : voiceHearing ? "Listening to you"
+    : voice.phase === "live" ? "Your turn — go ahead"
+    : live ? "Speaking" : typing ? "Listening to you" : frame.orbLabel;
+  const agentLine = live ? LIVE_LINE : (voice.agentLine ?? frame.agentLine);
   const header = live ? "Live" : frame.header;
-
-  const isOpen = (c: Card) => openOverride[c.file] ?? (!!c.open && !reading.has(c.file));
-  const toggle = (c: Card) => setOpenOverride((o) => ({ ...o, [c.file]: !isOpen(c) }));
 
   // Drop bar → simulate the uploads landing (jump to State C from A/B).
   const simulateUpload = () => { if (idx < 2) go(2); };
@@ -169,7 +129,7 @@ export default function Onboarding() {
 
           {/* Centre — voice orb */}
           <div className="centre">
-            <div className={`orb ${orbState}${orbState !== "idle" ? " live" : ""}`}>
+            <div className={`orb ${orbState}${orbState !== "idle" ? " live" : ""}`} onClick={scriptedMode ? undefined : voice.connect}>
               <div className="orb-halo" />
               <div className="orb-core-wrap"><div className="orb-core" /></div>
               <div className="orb-ring ring-a"><div /></div>
@@ -180,7 +140,7 @@ export default function Onboarding() {
             <div className="centre-text">
               <div className="orb-label">{orbLabel}</div>
               <div className="agent-line" key={agentLine}>{agentLine}</div>
-              {frame.caption && !live && (
+              {frame.caption && !live && !voiceActive && (
                 <div className="caption">
                   <div className="caption-text">{caption}<span className="caret" /></div>
                 </div>
@@ -290,6 +250,7 @@ export default function Onboarding() {
           )}
         </div>
       </div>
+      <audio ref={audioRef} autoPlay hidden />
     </div>
   );
 }
