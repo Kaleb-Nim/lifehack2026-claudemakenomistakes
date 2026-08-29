@@ -1,4 +1,4 @@
-# NovaBot Telegram consumer demo
+# Pluto Telegram consumer demo
 
 This directory (`apps/consumer-bot/`, part of the monorepo — see `AGENTS.md` here) contains the deterministic Telegram purchase flow for the
 LifeHack 2026 demo. It uses long polling and simulates Visa confirmation; it
@@ -37,6 +37,16 @@ App and invoke Telegram's native biometric manager. This is a simulated payment
 approval backed by local Face ID/Touch ID authentication, not a Visa payment
 passkey or real card transaction.
 
+The customer-facing sequence mirrors Visa's official VIC reference agent:
+active saved card, order summary, secure payment authorization, identity
+verification, then a purchase summary with order and tracking identifiers.
+See <https://github.com/visa/vic-reference-agent>.
+
+The comparison catalogue contains five real Singapore configurations sourced
+from the official Acer, Lenovo, Microsoft, HP, and Dell product stores. Product
+aliases are matched with regular expressions, and the selected product name and
+price are carried through the Mini App, authorization, receipt, and refund flow.
+
 Serve the Mini App locally:
 
 ```sh
@@ -50,7 +60,16 @@ in `.env`:
 MINI_APP_URL=https://your-public-https-domain.example/
 ```
 
-Restart the bot after changing the URL. If `MINI_APP_URL` is absent, the demo
+For local demos using localhost.run, the watchdog creates the tunnel, writes a
+healthy URL to `.env`, and reconnects automatically if the public endpoint
+expires:
+
+```sh
+python mini_app/tunnel_watchdog.py
+```
+
+Pluto reads `MINI_APP_URL` when it creates each confirmation button, so tunnel
+rotation does not require a bot restart. If `MINI_APP_URL` is absent, the demo
 falls back to the existing inline callback confirmation. On a successful native
 biometric result, the Mini App sends a `web_app_data` service message to the bot;
 the bot accepts it only while that user is at the Visa confirmation step.

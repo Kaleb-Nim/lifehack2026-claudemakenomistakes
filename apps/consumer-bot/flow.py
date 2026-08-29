@@ -12,7 +12,6 @@ class Step(str, Enum):
     DISCOVERY = "discovery"
     USE_CASES = "use_cases"
     SCHOOLWORK = "schoolwork"
-    SPECS = "specs"
     RECOMMENDATION = "recommendation"
     BUNDLE = "bundle"
     CHECKOUT = "checkout"
@@ -38,6 +37,7 @@ class OrderStatus(str, Enum):
 class Session:
     step: Step = Step.DISCOVERY
     selected_use_cases: set[str] = field(default_factory=set)
+    selected_product_key: str = content.DEFAULT_LAPTOP.key
     include_hub: bool = False
     payment_status: PaymentStatus = PaymentStatus.UNPAID
     order_status: OrderStatus = OrderStatus.NONE
@@ -53,6 +53,9 @@ class Button:
 class View:
     text: str
     button_rows: tuple[tuple[Button, ...], ...] = ()
+    product_name: str | None = None
+    rich_markdown: str | None = None
+    rich_html: str | None = None
 
 
 @dataclass(frozen=True)
@@ -73,10 +76,7 @@ CONTINUE_USE_CASES = "use:continue"
 SCHOOL_ESSAYS_RESEARCH = "school:essays_research"
 SCHOOL_COMPUTER_SCIENCE = "school:computer_science"
 SCHOOL_CREATIVE_PROJECTS = "school:creative_projects"
-SHOW_MATCHES = "specs:show_matches"
-ADJUST_REQUIREMENTS = "specs:adjust"
 COMPARE_OPTIONS = "recommend:compare"
-CHOOSE_NOVABOOK = "recommend:choose"
 ADD_HUB = "bundle:add_hub"
 LAPTOP_ONLY = "bundle:laptop_only"
 CUSTOMISE = "bundle:customise"
@@ -141,10 +141,15 @@ SCHOOL_DETAIL_ACTIONS = {
 def reset_session(session: Session) -> View:
     session.step = Step.DISCOVERY
     session.selected_use_cases.clear()
+    session.selected_product_key = content.DEFAULT_LAPTOP.key
     session.include_hub = False
     session.payment_status = PaymentStatus.UNPAID
     session.order_status = OrderStatus.NONE
     return current_view(session)
+
+
+def selected_laptop(session: Session) -> content.Laptop:
+    return content.laptop_by_key(session.selected_product_key)
 
 
 def current_view(session: Session, prefix: str | None = None) -> View:
@@ -154,35 +159,53 @@ def current_view(session: Session, prefix: str | None = None) -> View:
         return _use_cases_view(session, prefix)
     if session.step is Step.SCHOOLWORK:
         return _schoolwork_view(prefix)
-    if session.step is Step.SPECS:
-        text = content.spec_guidance_text(session.selected_use_cases)
-        if prefix:
-            text = f"{prefix}\n\n{text}"
-        return View(text, _spec_buttons())
     if session.step is Step.RECOMMENDATION:
         text = content.recommendation_text(session.selected_use_cases)
         if prefix:
             text = f"{prefix}\n\n{text}"
-        return View(text, _recommendation_buttons())
+        return View(
+            text,
+            _recommendation_buttons(),
+            rich_html=content.recommendation_rich_html(
+                session.selected_use_cases,
+                prefix,
+            ),
+        )
     if session.step is Step.BUNDLE:
         return View(content.bundle_text(prefix), _bundle_buttons())
     if session.step is Step.CHECKOUT:
         return View(
-            content.checkout_text(session.include_hub, prefix), _checkout_buttons()
+            content.checkout_text(
+                selected_laptop(session), session.include_hub, prefix
+            ),
+            _checkout_buttons(),
         )
     if session.step is Step.VISA_CONFIRMATION:
-        text = content.visa_text(session.include_hub)
+        laptop = selected_laptop(session)
+        text = content.visa_text(laptop, session.include_hub)
         if prefix:
             text = f"{prefix}\n\n{text}"
-        return View(text, _visa_buttons(session.include_hub))
+        return View(
+            text,
+            _visa_buttons(laptop, session.include_hub),
+            product_name=laptop.name,
+        )
     if session.step is Step.ORDER_CONFIRMED:
-        return View(content.order_text(session.include_hub, prefix), _order_buttons())
+        return View(
+            content.order_text(selected_laptop(session), session.include_hub, prefix),
+            _order_buttons(),
+        )
     if session.step is Step.CANCELLATION_PREVIEW:
-        text = content.cancellation_preview_text(session.include_hub)
+        laptop = selected_laptop(session)
+        text = content.cancellation_preview_text(laptop, session.include_hub)
         if prefix:
             text = f"{prefix}\n\n{text}"
-        return View(text, _cancellation_buttons(session.include_hub))
-    return View(content.cancellation_complete_text(session.include_hub))
+        return View(text, _cancellation_buttons(laptop, session.include_hub))
+    return View(
+        content.cancellation_complete_text(
+            selected_laptop(session), session.include_hub
+        )
+    )
 
 
 def handle_text(session: Session, text: str) -> TransitionResult:
@@ -224,22 +247,32 @@ def handle_text(session: Session, text: str) -> TransitionResult:
             return TransitionResult(True, current_view(session))
         return TransitionResult(
             False,
-            current_view(session, content.SCHOOLWORK_REQUIRED_NOTICE),
+            current_view(session),
         )
-    elif session.step is Step.SPECS:
-        if any(word in normalized for word in ("match", "product", "show")):
-            return _handle_specs(session, SHOW_MATCHES)
-        if any(word in normalized for word in ("adjust", "change", "requirement")):
-            return _handle_specs(session, ADJUST_REQUIREMENTS)
     elif session.step is Step.RECOMMENDATION:
         if "compare" in normalized:
             return _handle_recommendation(session, COMPARE_OPTIONS)
-        if "buy" in normalized:
-            return _handle_recommendation(session, CHOOSE_NOVABOOK)
-        if any(
-            word in normalized for word in ("novabook", "recommendation", "recommended")
-        ):
-            return _handle_recommendation(session, CHOOSE_NOVABOOK)
+        laptop = content.match_laptop(normalized)
+        if laptop is not None:
+            session.selected_product_key = laptop.key
+            session.include_hub = False
+            session.step = Step.VISA_CONFIRMATION
+            return TransitionResult(True, current_view(session))
+        if any(word in normalized for word in ("buy", "choose", "get", "order")):
+            return TransitionResult(
+                False,
+                View(
+                    "<b>Which laptop would you like to buy?</b>\n\n"
+                    + content.recommendation_text(session.selected_use_cases),
+                    _recommendation_buttons(),
+                    rich_html=(
+                        "<h2>Which laptop would you like to buy?</h2>\n"
+                        + content.recommendation_rich_html(
+                            session.selected_use_cases
+                        )
+                    ),
+                ),
+            )
     elif session.step is Step.BUNDLE:
         if any(phrase in normalized for phrase in ("laptop only", "no hub")):
             return _handle_bundle(session, LAPTOP_ONLY)
@@ -268,7 +301,7 @@ def handle_text(session: Session, text: str) -> TransitionResult:
         ):
             return _handle_cancellation(session, KEEP_ORDER)
 
-    return TransitionResult(False, current_view(session, content.FREE_TEXT_GUIDANCE))
+    return TransitionResult(False, current_view(session))
 
 
 def _infer_use_cases(text: str) -> set[str]:
@@ -290,8 +323,6 @@ def handle_action(session: Session, action: str) -> TransitionResult:
         return _handle_use_cases(session, action)
     if session.step is Step.SCHOOLWORK:
         return _handle_schoolwork(session, action)
-    if session.step is Step.SPECS:
-        return _handle_specs(session, action)
     if session.step is Step.RECOMMENDATION:
         return _handle_recommendation(session, action)
     if session.step is Step.BUNDLE:
@@ -340,8 +371,7 @@ def _handle_use_cases(session: Session, action: str) -> TransitionResult:
         return TransitionResult(True, current_view(session))
     if action == CONTINUE_USE_CASES:
         if not session.selected_use_cases:
-            notice = content.USE_CASE_REQUIRED_NOTICE
-            return TransitionResult(False, current_view(session, notice), notice)
+            return TransitionResult(False, current_view(session))
         session.step = Step.RECOMMENDATION
         return TransitionResult(True, current_view(session))
     return _stale_result(session)
@@ -356,27 +386,16 @@ def _handle_schoolwork(session: Session, action: str) -> TransitionResult:
     return TransitionResult(True, current_view(session))
 
 
-def _handle_specs(session: Session, action: str) -> TransitionResult:
-    if action == SHOW_MATCHES:
-        session.step = Step.RECOMMENDATION
-        return TransitionResult(True, current_view(session))
-    if action == ADJUST_REQUIREMENTS:
-        session.selected_use_cases.clear()
-        session.step = Step.USE_CASES
-        return TransitionResult(True, current_view(session))
-    return _stale_result(session)
-
-
 def _handle_recommendation(session: Session, action: str) -> TransitionResult:
     if action == COMPARE_OPTIONS:
         return TransitionResult(
             True,
-            View(content.comparison_text(), _recommendation_buttons()),
+            View(
+                content.comparison_text(),
+                _recommendation_buttons(),
+                rich_markdown=content.comparison_markdown(),
+            ),
         )
-    if action == CHOOSE_NOVABOOK:
-        session.include_hub = False
-        session.step = Step.VISA_CONFIRMATION
-        return TransitionResult(True, current_view(session))
     return _stale_result(session)
 
 
@@ -392,7 +411,10 @@ def _handle_bundle(session: Session, action: str) -> TransitionResult:
     if action == CUSTOMISE:
         return TransitionResult(
             True,
-            View(content.bundle_text(content.customise_text()), _bundle_buttons()),
+            View(
+                content.bundle_text(content.customise_text(selected_laptop(session))),
+                _bundle_buttons(),
+            ),
         )
     return _stale_result(session)
 
@@ -427,14 +449,21 @@ def _handle_order(session: Session, action: str) -> TransitionResult:
         return TransitionResult(
             True,
             View(
-                content.order_text(session.include_hub, content.tracking_text()),
+                content.order_text(
+                    selected_laptop(session),
+                    session.include_hub,
+                    content.tracking_text(),
+                ),
                 _order_buttons(),
             ),
         )
     if action == VIEW_RECEIPT:
         return TransitionResult(
             True,
-            View(content.receipt_text(session.include_hub), _order_buttons()),
+            View(
+                content.receipt_text(selected_laptop(session), session.include_hub),
+                _order_buttons(),
+            ),
         )
     if action == CANCEL_ORDER:
         session.step = Step.CANCELLATION_PREVIEW
@@ -517,20 +546,8 @@ def _schoolwork_view(prefix: str | None = None) -> View:
     )
 
 
-def _spec_buttons() -> tuple[tuple[Button, ...], ...]:
-    return (
-        (Button(content.BUTTON_SHOW_MATCHES, SHOW_MATCHES),),
-        (Button(content.BUTTON_ADJUST_REQUIREMENTS, ADJUST_REQUIREMENTS),),
-    )
-
-
 def _recommendation_buttons() -> tuple[tuple[Button, ...], ...]:
-    return (
-        (
-            Button(content.BUTTON_COMPARE, COMPARE_OPTIONS),
-            Button(content.BUTTON_CHOOSE_NOVABOOK, CHOOSE_NOVABOOK),
-        ),
-    )
+    return ((Button(content.BUTTON_COMPARE, COMPARE_OPTIONS),),)
 
 
 def _bundle_buttons() -> tuple[tuple[Button, ...], ...]:
@@ -552,11 +569,14 @@ def _checkout_buttons() -> tuple[tuple[Button, ...], ...]:
     )
 
 
-def _visa_buttons(include_hub: bool) -> tuple[tuple[Button, ...], ...]:
+def _visa_buttons(
+    laptop: content.Laptop,
+    include_hub: bool,
+) -> tuple[tuple[Button, ...], ...]:
     return (
         (
             Button(
-                content.payment_confirmation_button_label(include_hub),
+                content.payment_confirmation_button_label(laptop, include_hub),
                 CONFIRM_WITH_PASSKEY,
             ),
             Button(content.BUTTON_CANCEL_CHECKOUT, CANCEL_CHECKOUT),
@@ -574,12 +594,15 @@ def _order_buttons() -> tuple[tuple[Button, ...], ...]:
     )
 
 
-def _cancellation_buttons(include_hub: bool) -> tuple[tuple[Button, ...], ...]:
+def _cancellation_buttons(
+    laptop: content.Laptop,
+    include_hub: bool,
+) -> tuple[tuple[Button, ...], ...]:
     return (
         (
             Button(content.BUTTON_KEEP_ORDER, KEEP_ORDER),
             Button(
-                content.cancellation_confirmation_button_label(include_hub),
+                content.cancellation_confirmation_button_label(laptop, include_hub),
                 CONFIRM_CANCELLATION,
             ),
         ),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from telegram import InlineKeyboardMarkup, ReplyKeyboardRemove
 
@@ -25,7 +26,7 @@ def select_coursework_and_programming(session: flow.Session) -> None:
 
 def advance_to_visa(session: flow.Session) -> None:
     select_coursework_and_programming(session)
-    flow.handle_text(session, "buy NovaBook Pro")
+    flow.handle_text(session, "buy Lenovo IdeaPad 5a")
 
 
 def advance_to_order(session: flow.Session) -> None:
@@ -85,7 +86,8 @@ class DiscoveryTests(unittest.TestCase):
             session.selected_use_cases,
             {"coursework", "programming"},
         )
-        self.assertIn("ROUGH SPEC RANGE", result.view.text)
+        self.assertIn("AVAILABLE LAPTOPS", result.view.text)
+        self.assertNotIn("ROUGH SPEC RANGE", result.view.text)
 
     def test_typed_scope_answer_advances_without_continue(self) -> None:
         session = flow.Session(step=flow.Step.USE_CASES)
@@ -109,6 +111,7 @@ class UseCaseTests(unittest.TestCase):
 
         self.assertEqual(session.step, flow.Step.SCHOOLWORK)
         self.assertIn("What kind of schoolwork", result.view.text)
+        self.assertNotIn("Essays and research", result.view.text)
 
     def test_computer_science_schoolwork_produces_specs(self) -> None:
         session = flow.Session(step=flow.Step.SCHOOLWORK)
@@ -117,7 +120,7 @@ class UseCaseTests(unittest.TestCase):
 
         self.assertEqual(session.step, flow.Step.RECOMMENDATION)
         self.assertEqual(session.selected_use_cases, {"coursework", "programming"})
-        self.assertIn("16 GB RAM", result.view.text)
+        self.assertIn("16 GB", result.view.text)
 
 
 class RecommendationAndCartTests(unittest.TestCase):
@@ -128,9 +131,19 @@ class RecommendationAndCartTests(unittest.TestCase):
         result = flow.TransitionResult(True, flow.current_view(session))
 
         self.assertEqual(session.step, flow.Step.RECOMMENDATION)
-        self.assertIn("NovaBook Pro 14 — S$899", result.view.text)
-        self.assertIn("16 GB RAM · 512 GB SSD", result.view.text)
-        self.assertIn("CodeMate Air 14", result.view.text)
+        self.assertIn("Acer Aspire Lite 14", result.view.text)
+        self.assertIn("Lenovo IdeaPad 5a 2-in-1", result.view.text)
+        self.assertIn("Microsoft Surface Laptop 13", result.view.text)
+        self.assertIn("HP ProBook 4 G1i 14", result.view.text)
+        self.assertIn("Dell Inspiron 14 2-in-1", result.view.text)
+        self.assertIn("S$1,099", result.view.text)
+        self.assertIn("16 GB", result.view.text)
+        self.assertIn("512 GB", result.view.text)
+        self.assertIn("1. Acer Aspire Lite 14", result.view.text)
+        self.assertIn("Why #1:", result.view.rich_html or "")
+        self.assertEqual((result.view.rich_html or "").count("<figure>"), 5)
+        self.assertNotIn("best", result.view.text.casefold())
+        self.assertNotIn("recommended", result.view.text.casefold())
 
     def test_comparison_does_not_change_product_state(self) -> None:
         session = flow.Session()
@@ -139,19 +152,41 @@ class RecommendationAndCartTests(unittest.TestCase):
         result = flow.handle_action(session, flow.COMPARE_OPTIONS)
 
         self.assertEqual(session.step, flow.Step.RECOMMENDATION)
-        self.assertIn("Here’s how the three options compare", result.view.text)
+        self.assertIn("LAPTOP COMPARISON", result.view.text)
+        self.assertIn("| Laptop", result.view.text)
 
     def test_buying_product_goes_directly_to_authentication(self) -> None:
         session = flow.Session()
         select_coursework_and_programming(session)
 
-        result = flow.handle_text(session, "buy NovaBook Pro")
+        result = flow.handle_text(session, "buy the Dell Inspiron 14")
 
         self.assertFalse(session.include_hub)
         self.assertEqual(session.step, flow.Step.VISA_CONFIRMATION)
-        self.assertIn("Item: NovaBook Pro 14", result.view.text)
-        self.assertIn("Pay S$899", result.view.text)
+        self.assertEqual(session.selected_product_key, "dell-inspiron-14-7440")
+        self.assertIn("Dell Inspiron 14 2-in-1", result.view.text)
+        self.assertIn("S$1,849", result.view.text)
+        self.assertIn("Passkey active", result.view.text)
         self.assertNotIn("hub", result.view.text.casefold())
+
+    def test_product_aliases_customize_checkout(self) -> None:
+        cases = (
+            ("acer", "Acer Aspire Lite 14"),
+            ("Lenovo IdeaPad", "Lenovo IdeaPad 5a 2-in-1"),
+            ("Surface", "Microsoft Surface Laptop 13"),
+            ("HP ProBook", "HP ProBook 4 G1i 14"),
+            ("Dell 7440", "Dell Inspiron 14 2-in-1"),
+        )
+        for answer, product_name in cases:
+            with self.subTest(answer=answer):
+                session = flow.Session()
+                select_coursework_and_programming(session)
+
+                result = flow.handle_text(session, answer)
+
+                self.assertEqual(session.step, flow.Step.VISA_CONFIRMATION)
+                self.assertIn(product_name, result.view.text)
+                self.assertEqual(result.view.product_name, product_name)
 
     def test_cancel_authentication_returns_to_products(self) -> None:
         session = flow.Session()
@@ -196,7 +231,9 @@ class PaymentSafeguardTests(unittest.TestCase):
         self.assertEqual(session.step, flow.Step.ORDER_CONFIRMED)
         self.assertEqual(session.payment_status, flow.PaymentStatus.APPROVED)
         self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
-        self.assertIn("Amount: S$899", result.view.text)
+        self.assertIn("Amount:", result.view.text)
+        self.assertIn("S$1,310", result.view.text)
+        self.assertIn("SG-NOVA-2048", result.view.text)
 
     def test_stale_action_cannot_change_payment_state(self) -> None:
         session = flow.Session()
@@ -218,8 +255,12 @@ class OrderAndCancellationTests(unittest.TestCase):
         tracking = flow.handle_action(session, flow.TRACK_ORDER)
         receipt = flow.handle_action(session, flow.VIEW_RECEIPT)
 
-        self.assertIn("NE-2048 is currently Preparing", tracking.view.text)
-        self.assertIn("Amount paid: S$899", receipt.view.text)
+        self.assertIn("NE-2048", tracking.view.text)
+        self.assertIn("Preparing", tracking.view.text)
+        self.assertIn("SG-NOVA-2048", tracking.view.text)
+        self.assertIn("Amount paid:", receipt.view.text)
+        self.assertIn("S$1,310", receipt.view.text)
+        self.assertIn("Lenovo IdeaPad 5a 2-in-1", receipt.view.text)
         self.assertIn("Visa ···· 4242", receipt.view.text)
         self.assertEqual(session.order_status, flow.OrderStatus.PREPARING)
 
@@ -270,7 +311,9 @@ class OrderAndCancellationTests(unittest.TestCase):
             session.payment_status,
             flow.PaymentStatus.REFUND_INITIATED,
         )
-        self.assertIn("Refund: S$899 initiated", result.view.text)
+        self.assertIn("Refund:", result.view.text)
+        self.assertIn("S$1,310", result.view.text)
+        self.assertIn("initiated", result.view.text)
         self.assertIn("RF-8821", result.view.text)
         self.assertIn("reversal, void, or refund", result.view.text)
 
@@ -284,6 +327,7 @@ class ResetAndIsolationTests(unittest.TestCase):
 
         self.assertEqual(session.step, flow.Step.DISCOVERY)
         self.assertEqual(session.selected_use_cases, set())
+        self.assertEqual(session.selected_product_key, content.DEFAULT_LAPTOP.key)
         self.assertFalse(session.include_hub)
         self.assertEqual(session.payment_status, flow.PaymentStatus.UNPAID)
         self.assertEqual(session.order_status, flow.OrderStatus.NONE)
@@ -305,7 +349,8 @@ class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(discovery_markup, ReplyKeyboardRemove)
 
         payment_session = flow.Session(step=flow.Step.VISA_CONFIRMATION)
-        payment_markup = bot.telegram_markup(flow.current_view(payment_session))
+        with patch.object(bot, "current_mini_app_url", return_value=""):
+            payment_markup = bot.telegram_markup(flow.current_view(payment_session))
         self.assertIsInstance(payment_markup, InlineKeyboardMarkup)
         self.assertEqual(
             [
@@ -347,7 +392,12 @@ class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
         class Message:
             text = "laptop"
 
-            async def reply_text(self, text: str, reply_markup: object) -> None:
+            async def reply_text(
+                self,
+                text: str,
+                reply_markup: object,
+                parse_mode: object,
+            ) -> None:
                 events.append(("reply", text))
 
         update = SimpleNamespace(
@@ -369,7 +419,12 @@ class TelegramAdapterTests(unittest.IsolatedAsyncioTestCase):
         events: list[tuple[str, object]] = []
 
         class Message:
-            async def reply_text(self, text: str, reply_markup: object) -> None:
+            async def reply_text(
+                self,
+                text: str,
+                reply_markup: object,
+                parse_mode: object,
+            ) -> None:
                 events.append(("reply", text))
 
         class Query:
