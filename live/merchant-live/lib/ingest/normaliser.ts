@@ -294,3 +294,91 @@ export function publishable(result: NormaliseResult): NormalisedProduct[] {
     (p) => typeof p.priceCents === "number" && p.priceCents > 0,
   );
 }
+
+// Mapping a whole storefront in one call does not work: 40 products against
+// this schema ran past four minutes in testing, which no serverless platform
+// will wait for. Small batches are each fast, several can run at once, real
+// progress becomes reportable, and a failure costs one batch instead of the
+// import.
+const BATCH_SIZE = 8;
+// Bounded so a large catalogue cannot open dozens of parallel model calls.
+const MAX_CONCURRENCY = 4;
+
+/**
+ * Map many items by batching them.
+ *
+ * `chunks` are self-contained passages — one product each — so a batch
+ * boundary never splits a product in half.
+ */
+export async function normaliseMany(
+  chunks: string[],
+  source: string,
+  onProgress?: (done: number, total: number) => void | Promise<void>,
+): Promise<NormaliseResult> {
+  const batches: string[][] = [];
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    batches.push(chunks.slice(i, i + BATCH_SIZE));
+  }
+
+  const merged: NormaliseResult = {
+    products: [],
+    gaps: [],
+    unmapped: [],
+    followUp: null,
+  };
+  let completed = 0;
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < batches.length) {
+      const index = cursor++;
+      const batch = batches[index];
+      try {
+        const result = await normalise(batch.join("\n\n"), `${source} (batch ${index + 1})`);
+        merged.products.push(...result.products);
+        merged.gaps.push(...result.gaps);
+        merged.unmapped.push(...result.unmapped);
+      } catch (error) {
+        // One bad batch must not lose the rest of the catalogue.
+        console.error(`Batch ${index + 1} failed`, error);
+        merged.unmapped.push({
+          reason: "Could not be read",
+          raw: batch.join("\n\n").slice(0, 200),
+        });
+      }
+      completed += batch.length;
+      await onProgress?.(Math.min(completed, chunks.length), chunks.length);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(MAX_CONCURRENCY, batches.length) }, worker),
+  );
+
+  // Each batch wrote a follow-up for its own slice, which would read as a
+  // dozen near-identical questions. Ask once, about everything still open.
+  merged.followUp = summariseFollowUp(merged);
+  return merged;
+}
+
+/** One question covering every outstanding gap, rather than one per batch. */
+export function summariseFollowUp(result: NormaliseResult): string | null {
+  const unpriced = result.gaps.filter((g) => g.missing.includes("price"));
+  const parts: string[] = [];
+
+  if (unpriced.length === 1) {
+    parts.push(`I couldn't find a price for ${unpriced[0].title}.`);
+  } else if (unpriced.length > 1) {
+    const names = unpriced.slice(0, 3).map((g) => g.title).join(", ");
+    const rest = unpriced.length > 3 ? ` and ${unpriced.length - 3} more` : "";
+    parts.push(`${unpriced.length} products have no price: ${names}${rest}.`);
+  }
+
+  const other = result.gaps.length - unpriced.length;
+  if (other > 0) {
+    parts.push(`${other} more need details before shoppers can find them.`);
+  }
+
+  parts.push("Anything else you'd like to add?");
+  return parts.join(" ");
+}

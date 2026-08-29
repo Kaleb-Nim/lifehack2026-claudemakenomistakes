@@ -99,6 +99,24 @@ export interface CatalogRow {
   source: string;
 }
 
+/**
+ * Strip bytes Postgres will not accept in a text column.
+ *
+ * A NUL (0x00) aborts the whole INSERT with "invalid byte sequence for
+ * encoding UTF8" — hit for real when scraping a live storefront whose product
+ * description carried one. Other C0 control characters are stripped too, since
+ * they render as garbage in a product card and are never meaningful here. Tab,
+ * newline and carriage return are kept: descriptions legitimately contain them.
+ *
+ * Applied at this boundary rather than in each ingest path, so every source —
+ * spreadsheet, crawl, voice — is covered by one guard.
+ */
+export function sanitiseText<T extends string | null | undefined>(value: T): T {
+  if (typeof value !== "string") return value;
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "") as T;
+}
+
 export function slugify(value: string): string {
   const slug = value
     .toLowerCase()
@@ -197,16 +215,18 @@ export async function normalise(
 
   return {
     merchant_slug: merchantSlug,
-    merchant_name: merchantName,
+    merchant_name: sanitiseText(merchantName),
     source_product_id: (await sourceProductId(merchantSlug, handle)).toString(),
     source_handle: handle,
-    title,
-    description: (product.description ?? "").trim(),
-    vendor: (product.brand ?? "").trim() || null,
-    product_type: productType,
+    title: sanitiseText(title),
+    description: sanitiseText((product.description ?? "").trim()),
+    vendor: sanitiseText((product.brand ?? "").trim()) || null,
+    product_type: sanitiseText(productType),
     category,
-    tags: (product.tags ?? []).map((t) => String(t).trim()).filter(Boolean),
-    sku: (product.sku ?? "").trim() || null,
+    tags: (product.tags ?? [])
+      .map((t) => sanitiseText(String(t).trim()))
+      .filter(Boolean),
+    sku: sanitiseText((product.sku ?? "").trim()) || null,
     currency: ((product.currency ?? "SGD").trim().toUpperCase() || "SGD").slice(0, 3),
     price_min: priceCents / 100,
     price_max: priceCents / 100,
@@ -272,12 +292,26 @@ async function embed(texts: string[]): Promise<number[][]> {
 export async function publish(
   products: ProductInput[],
   merchantName: string,
+  /**
+   * Canonical slug for this shop, when one already exists in the catalogue.
+   *
+   * Without it a shop that was previously scraped gets a second identity —
+   * the importer wrote "dynacore" while slugify("Dynacore Technologies Pte
+   * Ltd") gives "dynacore-technologies-pte-ltd" — and its whole catalogue is
+   * listed twice. Use findMerchantSlugByDomain() to resolve one.
+   */
+  merchantSlug?: string,
 ): Promise<PublishedProduct[]> {
   const name = (merchantName ?? "").trim();
   if (!name) throw new Error("merchantName is required");
   if (products.length === 0) return [];
 
-  const rows = await Promise.all(products.map((p) => normalise(p, name)));
+  const rows = await Promise.all(
+    products.map(async (p) => {
+      const row = await normalise(p, name);
+      return merchantSlug ? { ...row, merchant_slug: merchantSlug } : row;
+    }),
+  );
   const client = db();
   const published: PublishedProduct[] = [];
   const ids: string[] = [];
@@ -296,7 +330,7 @@ export async function publish(
         ${row.currency}, ${row.price_min}, ${row.price_max}, ${row.available},
         ${row.product_url}, ${row.image_url}, now(), ${row.source}
       )
-      ON CONFLICT (merchant_slug, source_product_id) DO UPDATE SET
+      ON CONFLICT (merchant_slug, source_handle) DO UPDATE SET
         merchant_name = EXCLUDED.merchant_name,
         title = EXCLUDED.title,
         description = COALESCE(
@@ -402,4 +436,30 @@ export async function listPublished(merchantName: string) {
     )}`,
     available: r.available as boolean,
   }));
+}
+
+
+/**
+ * Find the slug a shop is already filed under, by matching its domain against
+ * existing product URLs.
+ *
+ * A merchant who was scraped before they onboarded would otherwise be given a
+ * second identity and have their catalogue listed twice — see
+ * schema/003-dedupe-by-handle.sql.
+ */
+export async function findMerchantSlugByDomain(
+  domain: string,
+): Promise<string | null> {
+  const host = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  if (!host) return null;
+
+  const rows = await db()`
+    SELECT merchant_slug, count(*) AS n
+    FROM public.catalog_products
+    WHERE product_url ILIKE ${"%" + host + "%"}
+    GROUP BY merchant_slug
+    ORDER BY n DESC
+    LIMIT 1
+  `;
+  return rows.length ? String(rows[0].merchant_slug) : null;
 }

@@ -125,6 +125,46 @@ worse than no listing, so it becomes a gap with a question instead.
 the contract, not extras: after mapping, the agent asks the merchant about what
 is missing and whether anything is left to add. Do not drop them on the floor.
 
+## Web research (transcript to real listings)
+
+`app/api/ingest/research/route.ts` turns what a merchant said into catalogue
+rows. Split so the model is never the source of a product fact:
+
+1. `lib/ingest/research.ts` — a model with web search resolves the spoken
+   description to a **domain**. Models are good at "which website is this shop".
+2. `lib/ingest/storefront.ts` — that shop's own Shopify feed supplies the
+   **products**. Models are bad at exact prices and model numbers, and a
+   paraphrased price is a wrong price.
+3. `normaliseMany()` maps them, `lib/catalog.ts` publishes.
+
+Found by running it, not by reasoning about it:
+
+- **Mapping in one call does not work.** 40 products against the schema ran
+  past four minutes and never finished; no serverless platform waits for that.
+  `normaliseMany()` batches 8 at a time, 4 in parallel — ~115s with real
+  progress, and one bad batch costs a batch rather than the import.
+- **Live data contains NUL bytes.** A scraped description carried `0x00`, which
+  aborts the whole INSERT with a UTF8 encoding error. `sanitiseText()` in
+  lib/catalog.ts strips C0 controls at the DB boundary, covering every source.
+- **`sql.json()`, never `JSON.stringify(...)::jsonb`.** postgres.js already
+  serialises for a jsonb column; stringifying first stores a JSON *string*
+  inside the jsonb, which reads back as text with every field `undefined` and
+  no error anywhere.
+- **One shop, one slug.** The importer filed Dynacore as `dynacore`;
+  `slugify("Dynacore Technologies Pte Ltd")` gives something else, so the same
+  shop became two merchants and its catalogue listed twice.
+  `findMerchantSlugByDomain()` resolves the existing slug before publishing.
+- **Dedupe is on `(merchant_slug, source_handle)`**, not `source_product_id` —
+  that id comes from the shop's feed for scraped rows and from a title hash for
+  onboarded ones, so the same product never conflicted with itself. Verified:
+  re-crawling a scraped shop now promotes those rows to merchant-sourced
+  instead of duplicating them, and the table has zero handle collisions.
+
+Long imports run as jobs (`lib/ingest/jobs.ts`, `schema/002-ingest-jobs.sql`)
+via `after()`, because web search alone runs to tens of seconds. Progress is
+written to the row: anything not written there is lost when the function is
+torn down, and a merchant cannot tell a slow import from a dead one.
+
 ## Still canned
 
 The fork did **not** make extraction real. `lib/canned-extracts.ts` still

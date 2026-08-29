@@ -19,6 +19,7 @@ import {
   embedText,
   normalise,
   slugify,
+  sanitiseText,
   sourceProductId,
 } from "./catalog";
 
@@ -148,5 +149,36 @@ describe("normalise", () => {
     expect((await normalise({ ...base, currency: "sgd" }, "Shop")).currency).toBe(
       "SGD",
     );
+  });
+});
+
+describe("sanitiseText", () => {
+  test("strips the NUL that aborts a Postgres insert", () => {
+    // Hit for real: a live storefront's product description carried 0x00 and
+    // Postgres rejected the whole INSERT with an encoding error.
+    expect(sanitiseText("ASUS \u0000 Vivobook")).toBe("ASUS  Vivobook");
+  });
+
+  test("strips other C0 control characters", () => {
+    expect(sanitiseText("a\u0007b\u000Bc")).toBe("abc");
+  });
+
+  test("keeps tab, newline and carriage return", () => {
+    // Descriptions legitimately contain these.
+    expect(sanitiseText("a\tb\nc\rd")).toBe("a\tb\nc\rd");
+  });
+
+  test("passes null and undefined through", () => {
+    expect(sanitiseText(null)).toBeNull();
+    expect(sanitiseText(undefined)).toBeUndefined();
+  });
+
+  test("normalise strips control bytes from a product", async () => {
+    const row = await normalise(
+      { title: "Wid\u0000get", priceCents: 100, description: "a\u0000b" },
+      "Shop",
+    );
+    expect(row.title).toBe("Widget");
+    expect(row.description).toBe("ab");
   });
 });
