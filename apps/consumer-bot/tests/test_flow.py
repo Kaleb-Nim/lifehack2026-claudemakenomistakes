@@ -141,7 +141,8 @@ class RecommendationAndCartTests(unittest.TestCase):
         self.assertIn("512 GB", result.view.text)
         self.assertIn("1. Acer Aspire Lite 14", result.view.text)
         self.assertIn("Why #1:", result.view.rich_html or "")
-        self.assertEqual((result.view.rich_html or "").count("<figure>"), 5)
+        self.assertIn("<tg-collage>", result.view.rich_html or "")
+        self.assertEqual((result.view.rich_html or "").count("<img src="), 5)
         self.assertNotIn("best", result.view.text.casefold())
         self.assertNotIn("recommended", result.view.text.casefold())
 

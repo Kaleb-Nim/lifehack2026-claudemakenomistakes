@@ -451,28 +451,35 @@ def recommendation_rich_html(
     prefix: str | None = None,
 ) -> str:
     selected_values = tuple(selected)
+    laptops = ranked_laptops(selected_values)
     parts: list[str] = []
     rich_prefix = _rich_prefix(prefix)
     if rich_prefix:
         parts.append(f"<p>{html.escape(rich_prefix)}</p>")
     parts.append(f"<h2>{html.escape(ranking_title(selected_values))}</h2>")
-    for rank, laptop in enumerate(ranked_laptops(selected_values), start=1):
+    collage = "".join(
+        f'<img src="{html.escape(laptop.image_url, quote=True)}"/>'
+        for laptop in laptops
+    )
+    parts.append(
+        f"<tg-collage>{collage}"
+        "<figcaption>Product photos shown in ranked order, 1 to 5</figcaption>"
+        "</tg-collage>"
+    )
+    for rank, laptop in enumerate(laptops, start=1):
         product_url = html.escape(laptop.source_url, quote=True)
-        image_url = html.escape(laptop.image_url, quote=True)
         specs = (
             f"{laptop.processor} · {laptop.ram} RAM · {laptop.storage} SSD · "
             f"{laptop.display}"
         )
         parts.append(
-            "<figure>"
-            f'<img src="{image_url}"/>'
-            "<figcaption>"
-            f'<a href="{product_url}"><b>{rank}. {html.escape(laptop.name)}</b></a>'
-            f" — <b>{money(laptop.price)}</b><br>"
-            f"{html.escape(specs)}<br>"
+            "<h3>"
+            f'<a href="{product_url}">{rank}. {html.escape(laptop.name)}</a>'
+            f" — {money(laptop.price)}"
+            "</h3>"
+            f"<p>{html.escape(specs)}<br>"
             f"<b>Why #{rank}:</b> {html.escape(ranking_reason(laptop, selected_values))}"
-            "</figcaption>"
-            "</figure>"
+            "</p>"
         )
     return "\n".join(parts)
 
