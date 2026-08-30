@@ -32,6 +32,16 @@ export const maxDuration = 60;
 // spending minutes in the mapping model on the first import.
 const MAX_LISTINGS = 40;
 
+// Display strings that name no particular shop. Publishing under one of these
+// would file a real catalogue against an account nobody owns.
+const PLACEHOLDER_NAMES = new Set([
+  "your shop",
+  "identifying…",
+  "identifying...",
+  "merchant",
+  "unknown",
+]);
+
 export async function POST(request: Request) {
   let body: { merchantName?: string; transcript?: string; domain?: string };
   try {
@@ -80,13 +90,18 @@ export async function POST(request: Request) {
       // Identify whenever we can, even with a domain in hand: the domain tells
       // us where to read, not who they are, and skipping this left products
       // filed under whatever placeholder the caller sent.
-      if (!domain || !merchantName) {
+      // A placeholder counts as no name: it is truthy, so testing merchantName
+      // alone skipped identification and left us asking for a name we could
+      // have looked up.
+      const needsName =
+        !merchantName || PLACEHOLDER_NAMES.has(merchantName.toLowerCase());
+      if (!domain || needsName) {
         await setProgress(job.id, "Looking up your shop online…");
         identity = await identifyMerchant(transcript || domain || "");
         domain = domain || identity.domain;
         // Prefer the name the shop is actually known by. The caller may have
         // sent a placeholder, or nothing at all.
-        if (identity.name && (!merchantName || identity.confidence === "high")) {
+        if (identity.name && (needsName || identity.confidence === "high")) {
           merchantName = identity.name;
           // Publish it now rather than at the end: the screen can name the shop
           // while the crawl it triggered is still running.
@@ -112,14 +127,20 @@ export async function POST(request: Request) {
       await setProgress(job.id, `Reading the catalogue on ${domain}…`);
       const storefront = await fetchStorefront(domain, MAX_LISTINGS);
 
-      if (!merchantName) {
+      // Refuse to publish under a name that identifies no one. MERCHANT_NAME
+      // can legitimately be a neutral display string like "your shop", and an
+      // earlier run filed 35 products from an unrelated US company under
+      // exactly that — a placeholder is not a merchant, and publishing into
+      // one mixes real catalogues together under a name nobody owns.
+      if (!merchantName || PLACEHOLDER_NAMES.has(merchantName.toLowerCase())) {
         await completeJob(job.id, {
           identity,
           domain,
           published: [],
           count: 0,
           gaps: [],
-          followUp: "What's your shop called? I'll file everything under that.",
+          followUp:
+            "I couldn't work out which shop this is. What's it called? I'll file everything under that.",
         });
         return;
       }

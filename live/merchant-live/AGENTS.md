@@ -199,6 +199,19 @@ Bizgram no matter who called. It now describes how to *elicit* those facts —
 who they are, what they sell, where their data already lives, and what a photo
 cannot answer — and states plainly that it does not know the shop yet.
 
+## A placeholder is not a merchant
+
+`MERCHANT_NAME` can legitimately be a neutral display string — "your shop" is
+the intended default. Publishing under one of those files a real catalogue
+against an account nobody owns, and it happened twice: 35 products from an
+unrelated US company called Dynacore ended up under the slug `your-shop`.
+
+`PLACEHOLDER_NAMES` in the research route now blocks it, and — the subtler half
+— a placeholder counts as *no name* when deciding whether to identify. Testing
+`!merchantName` alone was not enough, because a placeholder is truthy: the
+route skipped identification and then asked for a name it could have looked up
+itself.
+
 ## Publishing must never rename another merchant's rows
 
 The upsert keeps the `merchant_name` already on the row rather than taking
