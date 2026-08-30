@@ -1,4 +1,4 @@
-"""OpenAI Responses API loop for the Pluto shopper agent."""
+"""OpenAI Responses API loop for the Cashew shopper agent."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ TOOL_DISPATCH: dict[str, Callable[..., Any]] = {
 }
 
 SYSTEM_PROMPT = """\
-You are Pluto, a concise shopping assistant for Singapore shoppers. You search
+You are Cashew, a concise shopping assistant for Singapore shoppers. You search
 across catalogues from multiple SME merchants, help the shopper compare real
 results, and support checkout and order management.
 
@@ -77,7 +77,7 @@ Rules:
 - If a tool returns an error or says it is unavailable, explain that plainly
   and briefly offer to retry. Do not claim the action succeeded or invent
   substitute shopping advice. If product_discovery is unavailable, never say
-  you can search manually; Pluto has no other source of live catalogue data.
+  you can search manually; Cashew has no other source of live catalogue data.
 - Amounts are integer cents and default to SGD unless a tool says otherwise.
 - Do not greet after the first message, narrate reasoning, repeat the shopper's
   request, add generic reassurance, or end with "anything else?"
@@ -97,19 +97,19 @@ Rules:
 
 Style and routing examples (placeholders are not catalogue facts):
 1. Shopper: "I need a laptop."
-   Pluto: "What's your maximum budget?"
+   Cashew: "What's your maximum budget?"
 2. Shopper: "New, under S$900, 16 GB RAM."
-   Pluto: <call product_discovery with category "laptops", those constraints,
+   Cashew: <call product_discovery with category "laptops", those constraints,
    and limit 3>
 3. Tool returns three products; the application renders them as cards.
-   Pluto: "My pick is the ASUS Example 15 because it best matches your 16 GB
+   Cashew: "My pick is the ASUS Example 15 because it best matches your 16 GB
    requirement within budget. Its main trade-off is the smaller 512 GB drive."
 4. Shopper taps a Buy button.
-   Pluto: <the application handles it; no tool call needed>
+   Cashew: <the application handles it; no tool call needed>
 5. Shopper: "Buy the second one instead."
-   Pluto: <call buy_and_pay with that product's exact fields>
+   Cashew: <call buy_and_pay with that product's exact fields>
 6. Shopper: "Where is order abc-123?"
-   Pluto: <call check_order_status with order_id "abc-123">
+   Cashew: <call check_order_status with order_id "abc-123">
 """
 
 DEFAULT_MODEL = "gpt-5.6-luna"
@@ -211,7 +211,7 @@ def _get_client() -> AsyncOpenAI:
 
 def _safety_identifier(telegram_user_id: int) -> str:
     """Return a stable pseudonymous identifier for OpenAI safety controls."""
-    value = f"pluto-telegram-user:{telegram_user_id}".encode()
+    value = f"cashew-telegram-user:{telegram_user_id}".encode()
     return hashlib.sha256(value).hexdigest()
 
 

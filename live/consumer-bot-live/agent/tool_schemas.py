@@ -1,4 +1,4 @@
-"""Responses API function schemas for Pluto's local tools.
+"""Responses API function schemas for Cashew's local tools.
 
 These describe the interface the OpenAI agent loop dispatches against; the
 actual Python implementations are in tools/*.py. Keep names and parameter
@@ -192,7 +192,7 @@ LIST_MEMORY_TOOL = {
     "name": "list_memory",
     "description": (
         "List every durable fact currently stored about this shopper. Use when "
-        "they ask what Pluto remembers or knows about them. This does not list "
+        "they ask what Cashew remembers or knows about them. This does not list "
         "purchases; order history is available through check_order_status."
     ),
     "parameters": {
@@ -208,7 +208,7 @@ FORGET_TOOL = {
     "type": "function",
     "name": "forget",
     "description": (
-        "Delete one durable fact the shopper asks Pluto to forget. Pass the "
+        "Delete one durable fact the shopper asks Cashew to forget. Pass the "
         "exact stored fact from the memory context or list_memory result. Never "
         "use this for purchases or orders."
     ),

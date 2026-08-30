@@ -15,7 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-USER_AGENT = "PlutoCatalogImporter/1.0 (+LifeHack 2026; public catalogue snapshot)"
+USER_AGENT = "CashewCatalogImporter/1.0 (+LifeHack 2026; public catalogue snapshot)"
 DATABASE_URL_ENV = "CATALOG_DATABASE_URL"
 RAILWAY_DATABASE_URL_ENV = "DATABASE_PUBLIC_URL"
 DEFAULT_PER_MERCHANT = 100
