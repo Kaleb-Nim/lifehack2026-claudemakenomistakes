@@ -1,9 +1,11 @@
 {
   "name": "lifehack2026-monorepo",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": ["demo/*", "live/merchant-live"],
   "scripts": {
-    "dev:merchant": "bun run --cwd apps/merchant dev",
-    "build:merchant": "bun run --cwd apps/merchant build"
+    "dev:merchant": "bun run --cwd demo/merchant dev",
+    "build:merchant": "bun run --cwd demo/merchant build",
+    "dev:merchant-live": "bun run --cwd live/merchant-live dev",
+    "build:merchant-live": "bun run --cwd live/merchant-live build"
   }
 }
