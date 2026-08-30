@@ -204,6 +204,9 @@ export async function POST(request: Request) {
         merchantName,
         published,
         count: published.length,
+        // Listings sharing a title are one catalogue row; report the collapse
+        // rather than silently returning fewer products than were read.
+        merged: ready.length - published.length,
         skipped: mapped.products.length - ready.length,
         gaps: mapped.gaps,
         followUp: mapped.followUp,

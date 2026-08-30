@@ -231,7 +231,10 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
             )}
             <div className="log">
               {log.map((l, i) => (
-                <div key={l.text} className={`row ${l.mark}${l.tools ? " tools" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
+                // Position-qualified: two lines can legitimately read the
+                // same (a gap's question restating a product), and duplicate
+                // keys make React reuse the wrong row mid-animation.
+                <div key={`${i}-${l.text}`} className={`row ${l.mark}${l.tools ? " tools" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
                   <div className="row-mark">{MARK[l.mark]}</div>
                   <div className="row-text">{l.text}</div>
                   {l.tools ? (

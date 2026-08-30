@@ -16,6 +16,7 @@ import {
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
   MAX_DESCRIPTION_CHARS,
+  dedupeRows,
   embedText,
   normalise,
   slugify,
@@ -149,6 +150,76 @@ describe("normalise", () => {
     expect((await normalise({ ...base, currency: "sgd" }, "Shop")).currency).toBe(
       "SGD",
     );
+  });
+});
+
+// A merchant's stock sheet has one row per warehouse; the catalogue has one
+// row per product. Left uncollapsed, a 48-row sheet published 35 listings and
+// reported 48, showing thirteen products twice on screen.
+describe("dedupeRows", () => {
+  const rows = (...products: Parameters<typeof normalise>[0][]) =>
+    Promise.all(products.map((p) => normalise(p, "Dynacore")));
+
+  test("two rows for one product become one listing", async () => {
+    const deduped = dedupeRows(
+      await rows(
+        { title: 'Dynacore CarryCase 15"', priceCents: 2999, sku: "DYN-1037" },
+        { title: 'Dynacore CarryCase 15"', priceCents: 2999, sku: "DYN-1038" },
+      ),
+    );
+    expect(deduped).toHaveLength(1);
+  });
+
+  test("keeps distinct products and their order", async () => {
+    const deduped = dedupeRows(
+      await rows(
+        { title: "Dynacore MechType Keyboard", priceCents: 7999 },
+        { title: "Dynacore PrecisionMouse", priceCents: 3999 },
+        { title: "Dynacore MechType Keyboard", priceCents: 7999 },
+      ),
+    );
+    expect(deduped.map((r) => r.title)).toEqual([
+      "Dynacore MechType Keyboard",
+      "Dynacore PrecisionMouse",
+    ]);
+  });
+
+  test("the later row wins, as the upsert would leave it", async () => {
+    const deduped = dedupeRows(
+      await rows(
+        { title: "Widget", priceCents: 1000 },
+        { title: "Widget", priceCents: 1200 },
+      ),
+    );
+    expect(deduped[0].price_min).toBe(12);
+  });
+
+  test("a later row that omits a field keeps the earlier value", async () => {
+    const deduped = dedupeRows(
+      await rows(
+        {
+          title: "Widget",
+          priceCents: 1000,
+          description: "16 GB, 512 GB",
+          brand: "Dynacore",
+          tags: ["widget"],
+          sku: "DYN-1",
+          imageUrl: "https://example.com/w.jpg",
+        },
+        { title: "Widget", priceCents: 1000 },
+      ),
+    );
+    expect(deduped[0].description).toBe("16 GB, 512 GB");
+    expect(deduped[0].vendor).toBe("Dynacore");
+    expect(deduped[0].tags).toEqual(["widget"]);
+    expect(deduped[0].sku).toBe("DYN-1");
+    expect(deduped[0].image_url).toBe("https://example.com/w.jpg");
+  });
+
+  test("same title at two merchants is two listings", async () => {
+    const [a] = await Promise.all([normalise({ title: "Widget", priceCents: 100 }, "Shop A")]);
+    const [b] = await Promise.all([normalise({ title: "Widget", priceCents: 100 }, "Shop B")]);
+    expect(dedupeRows([a, b])).toHaveLength(2);
   });
 });
 

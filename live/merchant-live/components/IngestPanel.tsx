@@ -10,6 +10,10 @@
 // The gaps are the point. Anyone can list what succeeded; the reason a
 // merchant trusts this is that it tells them what is missing and what that
 // costs them, in their own commercial terms.
+//
+// It deliberately does NOT list the products it published. "Locked in" already
+// shows every one of them, and printing them again here put a second copy of
+// the catalogue on screen, overlapping the first.
 
 import type { Gap, PublishedProduct } from "../hooks/useIngest";
 
@@ -20,6 +24,8 @@ interface Props {
   gaps: Gap[];
   followUp: string | null;
   skipped: number;
+  /** Rows that were the same product as another row, and became one listing. */
+  merged: number;
   error: string | null;
   onDismiss: () => void;
 }
@@ -31,6 +37,7 @@ export default function IngestPanel({
   gaps,
   followUp,
   skipped,
+  merged,
   error,
   onDismiss,
 }: Props) {
@@ -62,6 +69,11 @@ export default function IngestPanel({
                 ? "Nothing new to add"
                 : `${published.length} product${published.length === 1 ? "" : "s"} added`}
             </strong>
+            {merged > 0 && (
+              <span className="ingest-skipped">
+                {merged} duplicate row{merged === 1 ? "" : "s"} merged
+              </span>
+            )}
             {skipped > 0 && (
               <span className="ingest-skipped">
                 {skipped} waiting on a price
@@ -71,23 +83,6 @@ export default function IngestPanel({
               Close
             </button>
           </div>
-
-          {published.length > 0 && (
-            <ul className="ingest-list">
-              {/* Enough to show it is real without turning into a catalogue. */}
-              {published.slice(0, 6).map((p) => (
-                <li key={p.productRef}>
-                  <span className="ingest-title">{p.title}</span>
-                  <span className="ingest-price">{p.priceDisplay}</span>
-                </li>
-              ))}
-              {published.length > 6 && (
-                <li className="ingest-more">
-                  and {published.length - 6} more
-                </li>
-              )}
-            </ul>
-          )}
 
           {gaps.length > 0 && (
             <ul className="ingest-gaps">

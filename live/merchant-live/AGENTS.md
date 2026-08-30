@@ -225,6 +225,29 @@ For the same reason the research route identifies the shop **even when a domain
 is supplied**. A domain says where to read, not who they are; skipping
 identification left products filed under whatever the caller happened to send.
 
+## One product per listing, however many rows describe it
+
+A merchant's stock sheet has one row per warehouse; the catalogue has one row
+per product. `data/dynacore_inventory.csv` is 48 rows and 35 products — thirteen
+titles appear twice, split across Penang and Singapore, same price, different
+SKU.
+
+Dedupe is on `(merchant_slug, source_handle)` and the handle is
+`slugify(title)`, so the second row of a pair always landed on the first row's
+listing. What was wrong was the report: `publish()` looped over its *inputs*, so
+each pair INSERTed twice — the second write updating the row the first had just
+created — and returned the same id twice. The screen said "48 products added",
+listed thirteen of them twice, and offered to go live with a catalogue that held
+35.
+
+`dedupeRows()` collapses them before the first INSERT, merging the way the
+`ON CONFLICT` block does rather than taking the last row wholesale, so a later
+row that omits a description does not blank the earlier one's. `publish()` now
+returns one entry per catalogue row, which is what makes `ready.length -
+published.length` at each call site a truthful "13 duplicate rows merged" — the
+merchant can count 48 rows in their own file and should not have to guess where
+the other thirteen went.
+
 ## The identified name is shown, and shown early
 
 Identification finishes in roughly the first 20-30 seconds; the crawl and
@@ -263,6 +286,19 @@ Two things to preserve:
   reads plain env vars, so importing it into this Client Component would give
   every field `undefined`. It falls back to `SHOP_NAME` so an unconfigured
   deployment still publishes somewhere sane.
+
+Two things that only show up on a real import, not a three-product one:
+
+- **The locked-in list scrolls.** It is a fixed 1080px stage, so a 35-row import
+  is taller than its column. With the default `overflow: visible` the list did
+  not clip — it painted on down the screen, across the Go live button and the
+  ingest panel. `.log` now scrolls inside the column, scrollbar hidden, as
+  `.right` already did.
+- **`IngestPanel` does not list what it published.** "Locked in" is the one
+  place products are listed; printing them again in the footer put a second
+  copy of the catalogue on screen overlapping the first. The panel reports the
+  counts, the gaps and the follow-up question — what the merchant still has to
+  act on.
 
 Only spreadsheets are read on upload. A dropped photo or PDF advances the beat
 but is not extracted — that path is still canned.

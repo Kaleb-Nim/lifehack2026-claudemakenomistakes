@@ -281,7 +281,53 @@ async function embed(texts: string[]): Promise<number[][]> {
 }
 
 /**
+ * Collapse products that would land on the same catalogue row.
+ *
+ * Dedupe is on (merchant_slug, source_handle) and the handle comes from the
+ * title, so one product stocked in two warehouses is two spreadsheet rows and
+ * exactly one listing. Left in, each pair was INSERTed twice — the second
+ * write updating the row the first had just created — and `publish` returned
+ * the same id twice. A real 48-row sheet reported "48 products added" and
+ * listed thirteen of them twice over a catalogue that in fact held 35.
+ *
+ * Merging mirrors the ON CONFLICT block below rather than taking the last row
+ * wholesale, so a later row that omits a field keeps the earlier row's value
+ * instead of blanking it — the same reason that block is not a plain
+ * EXCLUDED assignment.
+ */
+export function dedupeRows(rows: CatalogRow[]): CatalogRow[] {
+  const byHandle = new Map<string, CatalogRow>();
+  for (const row of rows) {
+    // NUL cannot appear in either half: sanitiseText strips it and slugify
+    // emits only [a-z0-9-].
+    const key = `${row.merchant_slug}\u0000${row.source_handle}`;
+    const seen = byHandle.get(key);
+    byHandle.set(key, seen ? mergeRow(seen, row) : row);
+  }
+  return [...byHandle.values()];
+}
+
+/** Later row wins, except where the upsert would keep what is stored. */
+function mergeRow(stored: CatalogRow, incoming: CatalogRow): CatalogRow {
+  return {
+    ...incoming,
+    merchant_name: stored.merchant_name,
+    description: incoming.description || stored.description,
+    vendor: incoming.vendor ?? stored.vendor,
+    product_type: incoming.product_type ?? stored.product_type,
+    tags: incoming.tags.length ? incoming.tags : stored.tags,
+    sku: incoming.sku ?? stored.sku,
+    product_url: incoming.product_url ?? stored.product_url,
+    image_url: incoming.image_url ?? stored.image_url,
+  };
+}
+
+/**
  * Write confirmed products to the catalogue and return what landed.
+ *
+ * Returns one entry per catalogue row, not per input: products sharing a
+ * title are one listing, so a caller comparing what it sent with what came
+ * back can tell the merchant how many rows were merged.
  *
  * Re-publishing the same product updates it rather than duplicating, and
  * fields left out keep their stored values — a merchant correcting a price
@@ -306,12 +352,13 @@ export async function publish(
   if (!name) throw new Error("merchantName is required");
   if (products.length === 0) return [];
 
-  const rows = await Promise.all(
+  const mapped = await Promise.all(
     products.map(async (p) => {
       const row = await normalise(p, name);
       return merchantSlug ? { ...row, merchant_slug: merchantSlug } : row;
     }),
   );
+  const rows = dedupeRows(mapped);
   const client = db();
   const published: PublishedProduct[] = [];
   const ids: string[] = [];

@@ -36,6 +36,15 @@ export interface IngestState {
   followUp: string | null;
   /** Products understood but not published, e.g. no price. */
   skipped: number;
+  /**
+   * Rows that turned out to be the same product as another row.
+   *
+   * A sheet listing one product per warehouse is more rows than products, and
+   * the catalogue holds one listing per product. Shown so the difference
+   * between what the merchant sent and what went live is stated rather than
+   * discovered.
+   */
+  merged: number;
   /** What was read — a filename or a domain — so the UI can name the source. */
   lastSource: string;
   /**
@@ -56,6 +65,7 @@ const IDLE: IngestState = {
   gaps: [],
   followUp: null,
   skipped: 0,
+  merged: 0,
   lastSource: "",
   identifiedName: null,
   error: null,
@@ -110,6 +120,7 @@ export function useIngest(merchantName: string) {
           gaps: data.gaps ?? [],
           followUp: data.followUp ?? null,
           skipped: data.skipped ?? 0,
+          merged: data.merged ?? 0,
         });
       } catch {
         set({ status: "error", error: "Could not reach the server." });
@@ -202,6 +213,7 @@ export function useIngest(merchantName: string) {
           gaps: result.gaps ?? [],
           followUp: result.followUp ?? null,
           skipped: result.skipped ?? 0,
+          merged: result.merged ?? 0,
         });
         return;
       }

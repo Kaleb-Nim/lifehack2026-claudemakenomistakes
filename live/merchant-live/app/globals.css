@@ -99,7 +99,13 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .left { width: 452px; flex: none; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .left-head { display: flex; align-items: baseline; justify-content: space-between; }
 .left-count { font-size: 13px; color: var(--color-neutral-700); }
-.log { display: flex; flex-direction: column; gap: 2px; }
+/* Scrolls inside the column rather than growing past it. A 48-row import made
+   the list 1600px tall in a 700px column; with the default `overflow: visible`
+   it simply painted on down the page, over the Go live button and the ingest
+   panel — the stage's own `overflow: hidden` clips at the frame, not here.
+   Scrollbar hidden to match `.right`, which does the same. */
+.log { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; display: flex; flex-direction: column; gap: 2px; }
+.log::-webkit-scrollbar { display: none; }
 .row { display: flex; gap: 10px; align-items: flex-start; padding: 5px 6px 5px 8px; border-radius: 10px; animation: rise 0.45s ease-out both; }
 .row.tools { background: var(--color-neutral-200); }
 .row-mark { font-size: 15px; line-height: 1.4; width: 12px; flex: none; }
@@ -270,14 +276,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   margin-left: auto; border: 0; background: none; cursor: pointer;
   color: var(--color-neutral-700, #60708a); text-decoration: underline; font-size: 13px;
 }
-.ingest-list, .ingest-gaps { margin: 10px 0 0; padding: 0; list-style: none; }
-.ingest-list li {
-  display: flex; gap: 12px; padding: 4px 0;
-  border-top: 1px solid var(--color-neutral-200, #eceef1);
-}
-.ingest-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ingest-price { font-variant-numeric: tabular-nums; }
-.ingest-more { padding-top: 4px; color: var(--color-neutral-700, #60708a); }
+/* No product list here: "Locked in" is the one place products are listed. */
+.ingest-gaps { margin: 10px 0 0; padding: 0; list-style: none; }
 .ingest-gaps li {
   padding: 6px 0 6px 12px; margin-top: 6px;
   border-left: 2px solid var(--color-accent-700, #c07a1f);

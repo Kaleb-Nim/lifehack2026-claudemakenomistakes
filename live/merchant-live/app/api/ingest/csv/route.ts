@@ -121,6 +121,9 @@ export async function POST(request: Request) {
   return NextResponse.json({
     published,
     count: published.length,
+    // Two warehouse rows for one product are one listing. Say so, rather than
+    // letting a merchant count 48 rows in their sheet and 35 in the catalogue.
+    merged: ready.length - published.length,
     // Everything below is what the merchant still needs to act on.
     skipped: result.products.length - ready.length,
     gaps: result.gaps,
