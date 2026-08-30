@@ -6,17 +6,31 @@ import { BEATS, TOOLS } from "../lib/agent-script";
 
 describe("agent-script", () => {
 
-  test("advanceOn matches the shoot's five conditions, one per beat", () => {
+  test("advanceOn matches the beat table, one per beat", () => {
     expect(BEATS.map((b) => b.advanceOn)).toEqual([
       "speech_stopped", // A
       "upload",         // B
       "audio_done",     // C
       "speech_stopped", // D
       "speech_stopped", // E
-      "pill",           // F
-      "pill",           // F2
+      "speech_stopped", // F  — was "pill" until the tap targets were removed
+      "speech_stopped", // F2 — same
       "operator",       // G
     ]);
+  });
+
+  test("every beat advances on a signal something can actually emit", () => {
+    // The real invariant, and the one that bit: F and F2 waited on "pill"
+    // after the pill buttons were deleted, so the cursor stalled there forever
+    // with nothing in the UI able to free it. A beat waiting on a signal no
+    // producer emits is a dead end, not a slow beat.
+    //
+    // speech_stopped and audio_done come from the voice session itself;
+    // upload and operator are emitted by components/Onboarding.tsx via
+    // voice.notify(). Anything else has no source.
+    const emittable = new Set(["speech_stopped", "audio_done", "upload", "operator"]);
+    const stalled = BEATS.filter((b) => !emittable.has(b.advanceOn));
+    expect(stalled.map((b) => `${b.key}:${b.advanceOn}`)).toEqual([]);
   });
 
   test("beat C's minimum dwell outlasts the last Context-card clear delay (8500ms)", () => {

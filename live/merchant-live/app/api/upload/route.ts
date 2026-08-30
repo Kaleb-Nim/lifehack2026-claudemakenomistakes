@@ -5,7 +5,7 @@
 // GET                                             -> lists all stored sources (reload rehydration).
 //
 // This route is intentionally the only place MERCH-03 touches the `app/` tree — everything else
-// it needs lives in lib/uploads.ts, lib/thumbnails.ts and lib/source-matcher.ts so it stays
+// it needs lives in lib/uploads.ts and lib/thumbnails.ts so it stays
 // importable and testable without spinning up Next's request machinery.
 
 import { NextRequest, NextResponse } from "next/server";

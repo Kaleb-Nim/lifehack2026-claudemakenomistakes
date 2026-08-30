@@ -1,5 +1,5 @@
 // Minimal ambient declaration for `bun:test`, used by the MERCH-03 test files
-// (lib/source-matcher.test.ts, app/api/upload/route.test.ts).
+// (app/api/upload/route.test.ts and the lib/ test files).
 //
 // The real types ship in the `bun-types` / `@types/bun` package, but adding that as a
 // devDependency would touch a second line of package.json — MERCH-03's brief keeps that file's

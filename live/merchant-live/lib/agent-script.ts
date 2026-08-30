@@ -151,6 +151,10 @@ export const TOOL_HANDLERS: Record<ToolName, (args: Record<string, unknown>) => 
 const tool = (name: ToolName, args: Record<string, unknown>, atMs?: number): BeatToolCall =>
   (atMs === undefined ? { name, args } : { name, args, atMs });
 
+// The tool ARGS are intentionally empty. TOOL_HANDLERS are stubs that render
+// nothing — the screen's panels come from real ingest results now — so the args
+// only ever held one specific shop's rehearsed answers. The tool NAMES stay:
+// they are what each beat reports having done, and tests pin their coverage.
 // ── The beats, A → G ─────────────────────────────────────────────────────────
 // Each beat's `tools` fire once, at the moment its own advanceOn condition is met — i.e.
 // they produce whatever becomes newly visible on the frame being entered next. The screen
@@ -161,22 +165,22 @@ export const BEATS: Beat[] = [
     key: "A",
     advanceOn: "speech_stopped",
     tools: [
-      tool("lock_fact", { fact: "Shop: Bizgram Asia · Sim Lim Square #05-50" }),
-      tool("lock_fact", { fact: "Sells: laptops + components (HDD, GPU, servers)" }),
-      tool("lock_fact", { fact: "Scope for agent: laptops first (owner's words)" }),
+      tool("lock_fact", {}),
+      tool("lock_fact", {}),
+      tool("lock_fact", {}),
     ],
   },
   {
     key: "B",
     advanceOn: "upload",
     tools: [
-      tool("search_web", { query: "bizgram.com" }),
-      tool("read_source", { source: "001 Bizgram Asia Pricelist August 29, 2026.pdf" }),
-      tool("read_source", { source: "ACER-LAPTOP-OFFER-PROMO-SINGAPORE.pdf" }),
-      tool("read_source", { source: "3 photos" }),
-      tool("flag_conflict", { conflict: "Swift Go 14: flyer $1,349 (expired) vs price list $1,299 vs shelf $1,299" }),
-      tool("flag_conflict", { conflict: "Price list says \"cash or PayNow\" — card price unknown" }),
-      tool("flag_conflict", { conflict: "1,100+ component SKUs found — include or not?" }),
+      tool("search_web", {}),
+      tool("read_source", {}),
+      tool("read_source", {}),
+      tool("read_source", {}),
+      tool("flag_conflict", {}),
+      tool("flag_conflict", {}),
+      tool("flag_conflict", {}),
     ],
   },
   {
@@ -191,48 +195,46 @@ export const BEATS: Beat[] = [
     // (progress bar + trace lines) instead of the ordinary orb-only Beat-tier pause.
     thinkTier: "work",
     tools: [
-      tool("resolve_flag", { conflict: "Swift Go 14: flyer $1,349 (expired) vs price list $1,299 vs shelf $1,299", resolution: "Swift Go 14 = $1,299 cash/PayNow · $1,349 card" }),
-      tool("resolve_flag", { conflict: "Price list says \"cash or PayNow\" — card price unknown", resolution: "Card surcharge: +$50 on laptops" }),
-      tool("resolve_flag", { conflict: "1,100+ component SKUs found — include or not?", resolution: "Scope: laptops + accessories (components excluded for now)" }),
-      tool("lock_fact", { fact: "Source priority: price list > shelf tag > flyer (specs only) > website (names only)" }),
+      tool("resolve_flag", {}),
+      tool("resolve_flag", {}),
+      tool("resolve_flag", {}),
+      tool("lock_fact", {}),
     ],
   },
   {
     key: "D",
     advanceOn: "speech_stopped",
     tools: [
-      tool("lock_fact", { fact: "Warranty: 2-yr carry-in via shop · 7-day DOA exchange" }),
-      tool("lock_fact", { fact: "Services: SSD/RAM upgrades in shop, same day, free install w/ purchase" }),
-      tool("lock_fact", { fact: "Warehouse → shop: same day before 3pm, else next morning" }),
+      tool("lock_fact", {}),
+      tool("lock_fact", {}),
+      tool("lock_fact", {}),
     ],
   },
   {
     key: "E",
     advanceOn: "speech_stopped",
     tools: [
-      tool("lock_fact", { fact: "Aspire Go 15 = display set, last unit, full warranty, no box" }),
-      tool("ask_pill", {
-        question: "If a shopper wants something cheaper than what you stock, show only your products, or the closest match with an explanation?",
-        options: ["Only my products", "Closest match + explain"],
-      }),
+      tool("lock_fact", {}),
+      tool("ask_pill", {}),
     ],
   },
   {
     key: "F",
-    advanceOn: "pill",
+    // Was "pill". The tap targets were removed with the script, so nothing
+    // could emit that signal and the beat cursor stalled here forever. In a
+    // voice product the owner answers out loud anyway.
+    advanceOn: "speech_stopped",
     tools: [
-      tool("lock_fact", { fact: "Below-budget: show closest match + explain" }),
-      tool("ask_pill", {
-        question: "When a shopper wants to buy, pay in the chat and collect at #05-50, or send them to WhatsApp first?",
-        options: ["Pay in chat, collect at #05-50", "WhatsApp me first"],
-      }),
+      tool("lock_fact", {}),
+      tool("ask_pill", {}),
     ],
   },
   {
     key: "F2",
-    advanceOn: "pill",
+    // Same as F: no pill buttons exist to advance this.
+    advanceOn: "speech_stopped",
     tools: [
-      tool("lock_fact", { fact: "Checkout: pay in chat (Visa, card price) → collect at #05-50 · PayNow option kept" }),
+      tool("lock_fact", {}),
     ],
   },
   {

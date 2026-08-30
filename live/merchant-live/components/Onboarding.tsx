@@ -19,6 +19,9 @@ import { useBeatRunner } from "../lib/beat-runner";
 const OPENING_LINE =
   "Hi, I'm the agent for electronics shops. Tell me about your shop, or drop anything you have — a price list, photos of your shelves, your website. I'll do the sorting.";
 const DROP_HINT = "Whatever you already have. I'll read it and tell you what's missing.";
+// Enough speech to plausibly contain a shop name. Short acknowledgements
+// ("ya", "hello", "can") must not trigger a crawl of someone's server.
+const MIN_WORDS_TO_IDENTIFY = 25;
 
 const MARK: Record<LogLine["mark"], string> = { ok: "✓", q: "?", flag: "!", struck: "✓" };
 

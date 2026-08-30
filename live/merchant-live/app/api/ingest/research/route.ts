@@ -33,23 +33,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
   }
 
-  const merchantName = (body.merchantName ?? "").trim();
+  const requestedName = (body.merchantName ?? "").trim();
   const transcript = (body.transcript ?? "").trim();
   const domainHint = (body.domain ?? "").trim();
 
-  if (!merchantName) {
-    return NextResponse.json({ error: "merchantName is required" }, { status: 400 });
-  }
   if (!transcript && !domainHint) {
     return NextResponse.json(
       { error: "Supply a transcript or a domain" },
       { status: 400 },
     );
   }
+  // The name can come from the conversation instead of the caller: when the
+  // shop introduces itself, that is a better name than anything the UI guessed.
+  if (!requestedName && !transcript) {
+    return NextResponse.json(
+      { error: "merchantName is required when no transcript is supplied" },
+      { status: 400 },
+    );
+  }
 
   let job;
   try {
-    job = await createJob(merchantName, "research");
+    job = await createJob(requestedName || "Identifying…", "research");
   } catch (error) {
     console.error("Could not create job", error);
     return NextResponse.json({ error: "Could not start the import." }, { status: 502 });
@@ -61,11 +66,19 @@ export async function POST(request: Request) {
     try {
       let domain = domainHint || null;
       let identity = null;
+      // What products get filed under. Replaced by the shop's own name once
+      // the lookup finds it, so a placeholder never becomes a merchant.
+      let merchantName = requestedName;
 
       if (!domain) {
         await setProgress(job.id, "Looking up your shop online…");
         identity = await identifyMerchant(transcript);
         domain = identity.domain;
+        // Prefer the name the shop is actually known by. The caller may have
+        // sent a placeholder, or nothing at all.
+        if (identity.name && (!merchantName || identity.confidence === "high")) {
+          merchantName = identity.name;
+        }
 
         if (!domain) {
           // Not an error: we simply could not find them, and the merchant can
@@ -85,6 +98,18 @@ export async function POST(request: Request) {
 
       await setProgress(job.id, `Reading the catalogue on ${domain}…`);
       const storefront = await fetchStorefront(domain, MAX_LISTINGS);
+
+      if (!merchantName) {
+        await completeJob(job.id, {
+          identity,
+          domain,
+          published: [],
+          count: 0,
+          gaps: [],
+          followUp: "What's your shop called? I'll file everything under that.",
+        });
+        return;
+      }
 
       if (storefront.listings.length === 0) {
         await completeJob(job.id, {
@@ -142,6 +167,7 @@ export async function POST(request: Request) {
       await completeJob(job.id, {
         identity,
         domain,
+        merchantName,
         published,
         count: published.length,
         skipped: mapped.products.length - ready.length,
