@@ -32,3 +32,6 @@ next-env.d.ts
 
 # team standard is bun.lock — keep npm's lockfile local only
 package-lock.json
+
+# reference screenshots of other projects, not ours
+docs/Screenshot*.png
