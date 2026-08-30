@@ -44,7 +44,7 @@ from telegram.ext import (
 
 from agent import core
 from db import catalog_db, orders_db
-from tools import buy_and_pay
+from tools import buy_and_pay, list_memory
 
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 
@@ -64,9 +64,10 @@ BUY_CALLBACK_PREFIX = "buy:"
 # needs it re-sent. Refresh comfortably inside that window.
 TYPING_REFRESH_SECONDS = 4.0
 
-# Telegram truncates captions at 1024 characters, but the point of cards is
-# brevity: a card longer than this is the wall of text we are replacing.
-MAX_CAPTION_CHARS = 350
+# Telegram truncates captions at 1024 characters. Leave enough room for a
+# useful catalogue description without turning each result into a wall of text.
+MAX_CAPTION_CHARS = 600
+MAX_DESCRIPTION_CHARS = 220
 
 # Each card is its own message, so the tool's limit of 10 would be its own kind
 # of spam. Five is enough to choose between without endless scrolling.
@@ -87,6 +88,14 @@ def _short_title(title: str) -> str:
     return trimmed or title[:70]
 
 
+def _short_description(description: str) -> str:
+    """Normalise and trim catalogue copy for a readable Telegram card."""
+    text = " ".join((description or "").split())
+    if len(text) > MAX_DESCRIPTION_CHARS:
+        text = text[: MAX_DESCRIPTION_CHARS - 3].rstrip() + "..."
+    return text
+
+
 def _card_caption(rank: int, product: dict[str, Any]) -> str:
     lines = [
         f"<b>{rank}. {html.escape(_short_title(product['title']))}</b>",
@@ -95,6 +104,9 @@ def _card_caption(rank: int, product: dict[str, Any]) -> str:
             f"{html.escape(product['merchant_name'])}"
         ),
     ]
+    description = _short_description(product.get("description", ""))
+    if description:
+        lines.extend(["", html.escape(description)])
     for note in product.get("considerations") or []:
         lines.append(f"<i>{html.escape(note)}</i>")
     if not product.get("available", True):
@@ -378,10 +390,15 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "\n\n(Cancellation cannot be confirmed right now - the "
                 "checkout app is not configured.)"
             )
-    await message.reply_text(reply, reply_markup=keyboard)
+    products = core.take_pending_results(user.id, chat.id)
+    if products:
+        # The model's reply is the recommendation: show the evidence first, then
+        # place its best-pick message directly beneath the product cards.
+        await _send_product_cards(message, products)
+        await message.reply_text(reply, reply_markup=keyboard)
+    else:
+        await message.reply_text(reply, reply_markup=keyboard)
 
-    # Cards and lists come after the reply so the agent's framing line reads first.
-    await _send_product_cards(message, core.take_pending_results(user.id, chat.id))
     await _send_order_list(message, core.take_pending_orders(user.id, chat.id))
 
 
@@ -404,6 +421,36 @@ async def on_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "before and your past orders.",
         reply_markup=ReplyKeyboardRemove(),
     )
+
+
+async def on_memory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the durable facts stored for this Telegram user."""
+    message = update.effective_message
+    user = update.effective_user
+    if message is None or user is None:
+        return
+
+    try:
+        result = await asyncio.to_thread(list_memory.run, telegram_user_id=user.id)
+    except Exception:
+        logger.exception("Could not list memory for user %s", user.id)
+        await message.reply_text(
+            "Sorry, I couldn't load your saved memory just now. Please try again."
+        )
+        return
+
+    memories = result["memories"]
+    if not memories:
+        await message.reply_text("I don't have any durable facts saved about you.")
+        return
+
+    lines = ["<b>What I remember about you</b>"]
+    for index, memory in enumerate(memories, start=1):
+        category = html.escape(memory["category"])
+        fact = html.escape(memory["fact"])
+        lines.append(f"{index}. <i>{category}</i> — {fact}")
+    lines.append("\nTell me which fact to forget, and I'll remove it.")
+    await message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def on_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -571,6 +618,7 @@ def main() -> None:
     )
     # /start behaves as /new so a returning shopper gets a clean thread.
     application.add_handler(CommandHandler(["new", "start", "reset"], on_new))
+    application.add_handler(CommandHandler("memory", on_memory))
     application.add_handler(CommandHandler("verbose", on_verbose))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     logger.info("Starting consumer-bot-live (polling)...")

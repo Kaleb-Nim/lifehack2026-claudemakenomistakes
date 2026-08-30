@@ -97,6 +97,46 @@ def list_facts(telegram_user_id: int) -> list[dict[str, Any]]:
     return response.data or []
 
 
+def forget_fact(*, telegram_user_id: int, fact: str) -> dict[str, Any] | None:
+    """Delete one exact durable fact belonging to this shopper.
+
+    Matching follows remember_fact's whitespace and case normalization so the
+    model can copy a fact from its memory context without depending on casing.
+    """
+    fact = " ".join(fact.split())
+    if not fact:
+        raise ValueError("fact must not be empty")
+
+    existing = (
+        get_client()
+        .table("user_memories")
+        .select("id, fact, category")
+        .eq("telegram_user_id", telegram_user_id)
+        .execute()
+    )
+    needle = fact.casefold()
+    match = next(
+        (
+            row
+            for row in existing.data or []
+            if " ".join(row["fact"].split()).casefold() == needle
+        ),
+        None,
+    )
+    if match is None:
+        return None
+
+    response = (
+        get_client()
+        .table("user_memories")
+        .delete()
+        .eq("id", match["id"])
+        .eq("telegram_user_id", telegram_user_id)
+        .execute()
+    )
+    return response.data[0] if response.data else match
+
+
 def list_purchases(telegram_user_id: int) -> list[dict[str, Any]]:
     """Return this shopper's completed purchases, newest first."""
     response = (

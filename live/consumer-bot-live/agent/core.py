@@ -19,6 +19,8 @@ from tools import (
     buy_and_pay,
     cancel_order,
     check_order_status,
+    forget,
+    list_memory,
     product_discovery,
     remember,
 )
@@ -33,6 +35,8 @@ TOOL_DISPATCH: dict[str, Callable[..., Any]] = {
     "check_order_status": check_order_status.run,
     "cancel_order": cancel_order.run,
     "remember": remember.run,
+    "list_memory": list_memory.run,
+    "forget": forget.run,
 }
 
 SYSTEM_PROMPT = """\
@@ -58,6 +62,10 @@ Rules:
   now, anything about the current conversation, or arbitrary values they hand
   you such as codewords, numbers or test strings. When in doubt, do not call
   remember: a wrong or pointless memory is worse than none.
+- When the shopper asks what you remember about them, call list_memory. When
+  they ask you to forget a stored fact, call forget with the exact stored fact.
+  Never claim a fact was deleted unless the tool confirms it, and never use
+  forget for purchases or orders.
 - Once the shopper chooses a product, call buy_and_pay with the exact tool
   result fields. This creates a pending order and opens the payment app, where
   the shopper authorises with their passkey. Do not ask them to confirm in
@@ -76,10 +84,12 @@ Rules:
 - Normal replies are at most two short sentences or 60 words. Do not use
   Markdown tables.
 - After product_discovery, the application shows the shopper a photo card for
-  each product, with its price, merchant and a Buy button. Do NOT list, name,
-  describe or price the products - they can already see all of it, and
-  repeating it is the wall of text we are avoiding. Say one short line at most,
-  about what you filtered on or what to weigh up, then stop.
+  each product, with its description, price, merchant and a Buy button, then
+  sends your reply as a separate message beneath the cards. Recommend exactly
+  one result as the best match. Name it and give a concise reason grounded only
+  in the shopper's request and tool result; include one meaningful trade-off if
+  the result provides one. Do not recap or price every product. Use at most two
+  short sentences.
 - The same applies to check_order_status: the application prints the orders as
   a formatted list. Never recite order ids, statuses or amounts back. Answer
   only what was asked - "two orders, one still unpaid" - in one short line.
@@ -89,9 +99,11 @@ Style and routing examples (placeholders are not catalogue facts):
 1. Shopper: "I need a laptop."
    Pluto: "What's your maximum budget?"
 2. Shopper: "New, under S$900, 16 GB RAM."
-   Pluto: <call product_discovery with those constraints and limit 3>
+   Pluto: <call product_discovery with category "laptops", those constraints,
+   and limit 3>
 3. Tool returns three products; the application renders them as cards.
-   Pluto: "Three under S$900 with 16 GB. The first is the cheapest in stock."
+   Pluto: "My pick is the ASUS Example 15 because it best matches your 16 GB
+   requirement within budget. Its main trade-off is the smaller 512 GB drive."
 4. Shopper taps a Buy button.
    Pluto: <the application handles it; no tool call needed>
 5. Shopper: "Buy the second one instead."
@@ -100,7 +112,7 @@ Style and routing examples (placeholders are not catalogue facts):
    Pluto: <call check_order_status with order_id "abc-123">
 """
 
-DEFAULT_MODEL = "gpt-5-mini"
+DEFAULT_MODEL = "gpt-5.6-luna"
 MAX_TOOL_ROUNDS = 8
 
 # Telegram has no "new chat" for a DM, so a conversation would otherwise run
@@ -238,7 +250,13 @@ async def _run_tool(
         # tools this is also the ownership check - it scopes every lookup and
         # cancellation to the shopper who sent the message, so knowing an order
         # id is not enough to read or cancel someone else's order.
-        if name in ("remember", "check_order_status", "cancel_order"):
+        if name in (
+            "remember",
+            "list_memory",
+            "forget",
+            "check_order_status",
+            "cancel_order",
+        ):
             arguments["telegram_user_id"] = conversation_key[0]
 
         result = await asyncio.to_thread(function, **arguments)

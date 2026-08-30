@@ -1,4 +1,4 @@
-"""Responses API function schemas for Pluto's four local tools.
+"""Responses API function schemas for Pluto's local tools.
 
 These describe the interface the OpenAI agent loop dispatches against; the
 actual Python implementations are in tools/*.py. Keep names and parameter
@@ -25,6 +25,31 @@ PRODUCT_DISCOVERY_TOOL = {
                     "attributes, budget, and constraints."
                 ),
             },
+            "category": {
+                "type": "string",
+                "enum": [
+                    "accessories",
+                    "cases",
+                    "cooling",
+                    "graphics-cards",
+                    "laptops",
+                    "memory",
+                    "monitors",
+                    "motherboards",
+                    "networking",
+                    "other-electronics",
+                    "pc-systems",
+                    "peripherals",
+                    "power-supplies",
+                    "processors",
+                    "storage",
+                ],
+                "description": (
+                    "Exact catalog category required by the shopper. This is a "
+                    "hard filter: use laptops for laptop requests, storage for "
+                    "SSDs, and accessories for mounts, docks, cables, or hubs."
+                ),
+            },
             "limit": {
                 "type": "integer",
                 "minimum": 1,
@@ -41,7 +66,7 @@ PRODUCT_DISCOVERY_TOOL = {
                 ),
             },
         },
-        "required": ["query", "limit", "max_price_cents"],
+        "required": ["query", "category", "limit", "max_price_cents"],
         "additionalProperties": False,
     },
     "strict": True,
@@ -162,10 +187,51 @@ REMEMBER_TOOL = {
     "strict": True,
 }
 
+LIST_MEMORY_TOOL = {
+    "type": "function",
+    "name": "list_memory",
+    "description": (
+        "List every durable fact currently stored about this shopper. Use when "
+        "they ask what Pluto remembers or knows about them. This does not list "
+        "purchases; order history is available through check_order_status."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+    "strict": True,
+}
+
+FORGET_TOOL = {
+    "type": "function",
+    "name": "forget",
+    "description": (
+        "Delete one durable fact the shopper asks Pluto to forget. Pass the "
+        "exact stored fact from the memory context or list_memory result. Never "
+        "use this for purchases or orders."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "fact": {
+                "type": "string",
+                "description": "The exact durable fact to delete.",
+            }
+        },
+        "required": ["fact"],
+        "additionalProperties": False,
+    },
+    "strict": True,
+}
+
 ALL_TOOLS = [
     PRODUCT_DISCOVERY_TOOL,
     BUY_AND_PAY_TOOL,
     CHECK_ORDER_STATUS_TOOL,
     CANCEL_ORDER_TOOL,
     REMEMBER_TOOL,
+    LIST_MEMORY_TOOL,
+    FORGET_TOOL,
 ]

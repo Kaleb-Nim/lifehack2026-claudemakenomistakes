@@ -16,6 +16,10 @@ the semantic arm returns actual laptops; on an exact SKU the reverse holds.
 
 If the query cannot be embedded (no OPENAI_API_KEY, or the embeddings call
 fails), discovery degrades to lexical-only rather than failing the shopper.
+
+The requested catalogue category is a hard constraint on both retrieval arms.
+Ranking therefore compares laptops with laptops, rather than trying to rank a
+laptop above an SSD or a laptop mount that happens to contain the same word.
 """
 
 from __future__ import annotations
@@ -53,6 +57,24 @@ RRF_K = 20
 # positive from the top spot while leaving exact-SKU results unchanged.
 SEMANTIC_WEIGHT = 1.5
 
+CATALOG_CATEGORIES = {
+    "accessories",
+    "cases",
+    "cooling",
+    "graphics-cards",
+    "laptops",
+    "memory",
+    "monitors",
+    "motherboards",
+    "networking",
+    "other-electronics",
+    "pc-systems",
+    "peripherals",
+    "power-supplies",
+    "processors",
+    "storage",
+}
+
 _HYBRID_SQL = f"""
 WITH lexical AS (
     SELECT id, ROW_NUMBER() OVER (ORDER BY paradedb.score(id) DESC, id) AS rank
@@ -64,6 +86,7 @@ WITH lexical AS (
               paradedb.match('product_type', %(query)s),
               paradedb.match('vendor', %(query)s)
           ])
+      AND category = %(category)s
       AND (%(max_price)s::numeric IS NULL OR price_min <= %(max_price)s::numeric)
     LIMIT {CANDIDATE_POOL}
 ),
@@ -71,6 +94,7 @@ semantic AS (
     SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> %(vector)s::vector, id) AS rank
     FROM public.catalog_products
     WHERE embedding IS NOT NULL
+      AND category = %(category)s
       AND (%(max_price)s::numeric IS NULL OR price_min <= %(max_price)s::numeric)
     ORDER BY embedding <=> %(vector)s::vector
     LIMIT {CANDIDATE_POOL}
@@ -86,7 +110,7 @@ fused AS (
     FROM lexical l
     FULL OUTER JOIN semantic s ON l.id = s.id
 )
-SELECT p.id, p.title, p.merchant_name, p.vendor, p.category,
+SELECT p.id, p.title, p.description, p.merchant_name, p.vendor, p.category,
        p.price_min, p.price_max, p.compare_at_price_min, p.currency,
        p.available, p.product_url, p.image_url,
        f.rrf_score, f.lexical_rank, f.semantic_rank
@@ -98,7 +122,7 @@ LIMIT %(limit)s
 
 # Lexical-only fallback, used when the query cannot be embedded.
 _LEXICAL_SQL = """
-SELECT p.id, p.title, p.merchant_name, p.vendor, p.category,
+SELECT p.id, p.title, p.description, p.merchant_name, p.vendor, p.category,
        p.price_min, p.price_max, p.compare_at_price_min, p.currency,
        p.available, p.product_url, p.image_url,
        paradedb.score(p.id) AS rrf_score, NULL::bigint AS lexical_rank,
@@ -111,6 +135,7 @@ WHERE p.id @@@ paradedb.disjunction_max(disjuncts => ARRAY[
           paradedb.match('product_type', %(query)s),
           paradedb.match('vendor', %(query)s)
       ])
+  AND p.category = %(category)s
   AND (%(max_price)s::numeric IS NULL OR p.price_min <= %(max_price)s::numeric)
 ORDER BY rrf_score DESC, p.price_min ASC
 LIMIT %(limit)s
@@ -159,7 +184,11 @@ def _considerations(row: dict[str, Any]) -> list[str]:
 
 
 def run(
-    *, query: str, limit: int = 5, max_price_cents: int | None = None
+    *,
+    query: str,
+    category: str,
+    limit: int = 5,
+    max_price_cents: int | None = None,
 ) -> list[dict[str, Any]]:
     """Search onboarded merchant catalogues and return ranked candidates.
 
@@ -170,13 +199,21 @@ def run(
     query = (query or "").strip()
     if not query:
         raise ValueError("query must not be empty")
+    category = (category or "").strip()
+    if category not in CATALOG_CATEGORIES:
+        raise ValueError(f"unsupported category: {category!r}")
     limit = max(1, min(int(limit), 10))
 
     # price_min is NUMERIC dollars; the tool contract speaks cents throughout.
     max_price = None if max_price_cents is None else float(max_price_cents) / 100
 
     vector = _embed_query(query)
-    params = {"query": query, "limit": limit, "max_price": max_price}
+    params = {
+        "query": query,
+        "category": category,
+        "limit": limit,
+        "max_price": max_price,
+    }
     if vector is None:
         sql = _LEXICAL_SQL
     else:
@@ -194,6 +231,7 @@ def run(
             {
                 "product_ref": str(row["id"]),
                 "title": row["title"],
+                "description": row["description"],
                 "merchant_name": row["merchant_name"],
                 "brand": row["vendor"],
                 "category": row["category"],
