@@ -212,7 +212,15 @@ For the same reason the research route identifies the shop **even when a domain
 is supplied**. A domain says where to read, not who they are; skipping
 identification left products filed under whatever the caller happened to send.
 
-## The identified name is shown
+## The identified name is shown, and shown early
+
+Identification finishes in roughly the first 20-30 seconds; the crawl and
+mapping it triggers take a couple of minutes more. The name is therefore
+written to the job row the moment it resolves (`setMerchantName`) and picked up
+by the poll while the job is still running — measured, the label appears at
+~27s on a job that finishes at ~136s. Setting it only on completion, as the
+first version did, meant knowing the shop's name and sitting on it for another
+109 seconds.
 
 Once the lookup resolves the shop, its name appears bold and centred in the
 header (`.hdr-shop`). It is absent until then rather than showing a

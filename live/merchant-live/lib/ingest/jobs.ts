@@ -69,6 +69,21 @@ export async function setProgress(id: string, progress: string): Promise<void> {
   `;
 }
 
+/**
+ * Record the shop's real name as soon as the lookup resolves it.
+ *
+ * Identification finishes in the first few seconds; the crawl and mapping take
+ * a minute or more after that. Writing the name here means the UI can label
+ * the shop straight away instead of waiting for the whole job.
+ */
+export async function setMerchantName(id: string, merchantName: string): Promise<void> {
+  await db()`
+    UPDATE public.ingest_jobs
+    SET merchant_name = ${merchantName}, updated_at = now()
+    WHERE id = ${id}
+  `;
+}
+
 export async function completeJob(id: string, result: unknown): Promise<void> {
   await db()`
     UPDATE public.ingest_jobs

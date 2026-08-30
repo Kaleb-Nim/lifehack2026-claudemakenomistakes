@@ -14,7 +14,14 @@
 import { NextResponse, after } from "next/server";
 
 import { findMerchantSlugByDomain, publish, type ProductInput } from "@/lib/catalog";
-import { completeJob, createJob, failJob, getJob, setProgress } from "@/lib/ingest/jobs";
+import {
+  completeJob,
+  createJob,
+  failJob,
+  getJob,
+  setMerchantName,
+  setProgress,
+} from "@/lib/ingest/jobs";
 import { normaliseMany, publishable } from "@/lib/ingest/normaliser";
 import { identifyMerchant } from "@/lib/ingest/research";
 import { fetchStorefront, listingsToChunks } from "@/lib/ingest/storefront";
@@ -81,6 +88,9 @@ export async function POST(request: Request) {
         // sent a placeholder, or nothing at all.
         if (identity.name && (!merchantName || identity.confidence === "high")) {
           merchantName = identity.name;
+          // Publish it now rather than at the end: the screen can name the shop
+          // while the crawl it triggered is still running.
+          await setMerchantName(job.id, merchantName);
         }
 
         if (!domain) {

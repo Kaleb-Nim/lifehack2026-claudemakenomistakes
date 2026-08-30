@@ -62,6 +62,10 @@ const IDLE: IngestState = {
 };
 
 // Slow enough not to hammer the endpoint, fast enough that progress feels live.
+// Matches the placeholder the research route files a job under before it
+// knows who the shop is.
+const IDENTIFYING_PLACEHOLDER = "Identifying…";
+
 const POLL_MS = 2500;
 // A crawl that has not finished in five minutes is not going to; say so rather
 // than polling forever behind a spinner.
@@ -174,7 +178,14 @@ export function useIngest(merchantName: string) {
         }
 
         if (job.status === "running" || job.status === "queued") {
-          set({ progress: job.progress });
+          // The name resolves seconds in, long before the crawl it kicked off
+          // finishes. Show it as soon as it is known rather than holding it
+          // back until the whole job completes.
+          const named =
+            job.merchantName && job.merchantName !== IDENTIFYING_PLACEHOLDER
+              ? job.merchantName
+              : null;
+          set({ progress: job.progress, ...(named ? { identifiedName: named } : {}) });
           continue;
         }
         if (job.status === "failed") {
