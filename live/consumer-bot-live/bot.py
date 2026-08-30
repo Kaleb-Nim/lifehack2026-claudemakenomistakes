@@ -120,7 +120,10 @@ STATUS_MARKS = {
     "pending": "⏳",
     "held": "⏸",
     "cancelled": "✖",
+    "pending_refund": "↩",
 }
+
+STATUS_LABELS = {"pending_refund": "pending refund"}
 
 
 async def _send_order_list(message, orders: list[dict[str, Any]]) -> None:
@@ -137,7 +140,8 @@ async def _send_order_list(message, orders: list[dict[str, Any]]) -> None:
         )
         lines.append(
             f"{html.escape(order['amount_display'])} · "
-            f"{html.escape(order['merchant_name'])} · {order['status']}"
+            f"{html.escape(order['merchant_name'])} · "
+            f"{STATUS_LABELS.get(order['status'], order['status'])}"
         )
         # Full UUIDs are unreadable in chat and never need typing back; the
         # prefix is enough to match a row, and code formatting makes it tappable.
@@ -191,11 +195,17 @@ def _payment_keyboard(payment: dict[str, Any]) -> ReplyKeyboardMarkup | None:
 
 
 def _cancellation_keyboard(cancellation: dict[str, Any]) -> ReplyKeyboardMarkup | None:
+    is_refund = cancellation.get("target_status") == "pending_refund"
     return _mini_app_keyboard(
         action=CANCEL_ACTION,
         order_id=cancellation["order_id"],
         product_name=cancellation["product_name"],
-        label=f"Confirm cancellation · {cancellation['amount_display']}",
+        label=(
+            f"Request refund · {cancellation['amount_display']}"
+            if is_refund
+            else f"Confirm cancellation · {cancellation['amount_display']}"
+        ),
+        cancellation_kind="refund" if is_refund else "void",
     )
 
 
@@ -245,7 +255,12 @@ def mini_app_url() -> str:
 
 
 def _mini_app_keyboard(
-    *, action: str, order_id: str, product_name: str, label: str
+    *,
+    action: str,
+    order_id: str,
+    product_name: str,
+    label: str,
+    cancellation_kind: str | None = None,
 ) -> ReplyKeyboardMarkup | None:
     """Build a Mini App launch button for an action needing a passkey.
 
@@ -270,6 +285,8 @@ def _mini_app_keyboard(
             "product_name": product_name,
         }
     )
+    if cancellation_kind is not None:
+        query["cancellation_kind"] = cancellation_kind
     url = urlunsplit(
         (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
     )
@@ -506,7 +523,13 @@ async def _settle_cancellation(message, order: dict[str, Any]) -> None:
             "That order is already cancelled.", reply_markup=ReplyKeyboardRemove()
         )
         return
-    if order["status"] not in ("pending", "held"):
+    if order["status"] == "pending_refund":
+        await message.reply_text(
+            "That order already has a refund pending.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    if order["status"] not in ("pending", "held", "paid"):
         await message.reply_text(
             f"That order is {order['status']} and can no longer be cancelled here.",
             reply_markup=ReplyKeyboardRemove(),
@@ -515,9 +538,15 @@ async def _settle_cancellation(message, order: dict[str, Any]) -> None:
 
     # The reason was stored when the tool ran, so it survives a restart between
     # asking and confirming.
-    cancelled = orders_db.update_order_status(order_id, "cancelled")
-    reason = cancelled.get("cancellation_reason")
-    text = f"Cancellation confirmed.\n{_short_title(cancelled['product_name'])}"
+    target_status = "pending_refund" if order["status"] == "paid" else "cancelled"
+    updated = orders_db.update_order_status(order_id, target_status)
+    reason = updated.get("cancellation_reason")
+    heading = (
+        "Refund request submitted."
+        if target_status == "pending_refund"
+        else "Cancellation confirmed."
+    )
+    text = f"{heading}\n{_short_title(updated['product_name'])}"
     if reason:
         text += f"\nReason: {reason}"
     text += f"\nOrder {order_id}"

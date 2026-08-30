@@ -4,9 +4,9 @@ Matches agent/tool_schemas.py::CANCEL_ORDER_TOOL.
 
 Like buy_and_pay, this tool does not complete the action. Cancelling is
 destructive and irreversible from the shopper's side, so it is authorised the
-same way paying is: the Mini App runs a biometric passkey check, and only then
-does bot.py flip the order to `cancelled`. This tool records the reason and
-hands off.
+same way paying is: the Mini App runs a biometric passkey check. Only then does
+bot.py flip an unpaid order to `cancelled`, or a paid order to
+`pending_refund`. This tool records the reason and hands off.
 
 The "send cancellation request to merchant dashboard" half of the architecture
 diagram is still NOT implemented — there is no merchant-dashboard API to call.
@@ -22,8 +22,7 @@ from typing import Any
 
 from db import orders_db
 
-# Cancelling a paid order would need a refund path, which does not exist yet.
-CANCELLABLE_STATUSES = ("pending", "held")
+CANCELLABLE_STATUSES = ("pending", "held", "paid")
 
 
 def run(*, order_id: str, reason: str, telegram_user_id: int) -> dict[str, Any]:
@@ -31,8 +30,8 @@ def run(*, order_id: str, reason: str, telegram_user_id: int) -> dict[str, Any]:
     if order is None or order["telegram_user_id"] != telegram_user_id:
         raise ValueError(f"No order {order_id!r} found for this shopper")
 
-    if order["status"] == "cancelled":
-        return {"order_id": order_id, "status": "cancelled", "already": True}
+    if order["status"] in ("cancelled", "pending_refund"):
+        return {"order_id": order_id, "status": order["status"], "already": True}
 
     if order["status"] not in CANCELLABLE_STATUSES:
         raise ValueError(
@@ -43,6 +42,7 @@ def run(*, order_id: str, reason: str, telegram_user_id: int) -> dict[str, Any]:
     orders_db.set_cancellation_reason(order_id, reason)
 
     currency = order.get("currency", "SGD")
+    target_status = "pending_refund" if order["status"] == "paid" else "cancelled"
     return {
         "order_id": order_id,
         "status": order["status"],
@@ -50,11 +50,12 @@ def run(*, order_id: str, reason: str, telegram_user_id: int) -> dict[str, Any]:
         "merchant_name": order["merchant_name"],
         "amount_display": f"{currency} {order['amount_cents'] / 100:,.2f}",
         "reason": reason,
+        "target_status": target_status,
         # bot.py keys off this to attach the Mini App confirmation button.
         "cancellation_confirmation_required": True,
         "next_step": (
-            "Tell the shopper to tap the button to confirm the cancellation "
-            "with their passkey. Do not say the order is cancelled - it is not "
-            "cancelled until they authorise."
+            "Tell the shopper to tap the button to authorise. Do not say the "
+            "action is complete: after authorisation, an unpaid order is "
+            "cancelled and a paid order becomes pending refund."
         ),
     }

@@ -15,11 +15,17 @@ create table if not exists orders (
   amount_cents integer not null check (amount_cents >= 0),
   currency text not null default 'SGD',
   status text not null default 'pending'
-    check (status in ('pending', 'paid', 'held', 'cancelled')),
+    check (status in ('pending', 'paid', 'held', 'cancelled', 'pending_refund')),
   cancellation_reason text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Keep existing installations in sync: `create table if not exists` does not
+-- update the status check on a table that has already been created.
+alter table orders drop constraint if exists orders_status_check;
+alter table orders add constraint orders_status_check
+  check (status in ('pending', 'paid', 'held', 'cancelled', 'pending_refund'));
 
 create index if not exists orders_telegram_user_id_idx
   on orders (telegram_user_id);

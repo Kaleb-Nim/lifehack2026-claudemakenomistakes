@@ -114,15 +114,16 @@ someone else's order id could read their purchase or cancel it.
 - `check_order_status` with `order_id: null` lists that shopper's own orders —
   this is how "show me my orders" is answered, and how they find an id they
   never wrote down.
-- `cancel_order` refuses anything not `pending`/`held` (a paid order needs a
-  refund, which does not exist yet) and is idempotent on an already-cancelled
-  order.
+- `cancel_order` accepts `pending`, `held`, and `paid` orders. After biometric
+  confirmation, unpaid orders become `cancelled`; paid orders become
+  `pending_refund`. It is idempotent on both terminal handoff states.
 - **Cancelling requires a passkey, like paying.** `cancel_order` does not
   cancel: it records the reason and hands off to the Mini App with
   `action=cancel:confirm`, and only `_settle_cancellation` in `bot.py` flips
-  the status. The reason is written to the row up front, so the confirmation
-  still works if the bot restarts between asking and confirming. Cancelling is
-  destructive, so it must not complete on the model's say-so.
+  the status to `cancelled` or `pending_refund`. The reason is written to the
+  row up front, so the confirmation still works if the bot restarts between
+  asking and confirming. Cancelling is destructive, so it must not complete on
+  the model's say-so.
 
 ## How results are shown
 

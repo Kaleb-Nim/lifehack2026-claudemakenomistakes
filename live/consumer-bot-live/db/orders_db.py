@@ -20,7 +20,7 @@ from supabase import Client, create_client
 _SUPABASE_URL_ENV = "SUPABASE_URL"
 _SUPABASE_SERVICE_KEY_ENV = "SUPABASE_SERVICE_KEY"
 
-OrderStatus = Literal["pending", "paid", "held", "cancelled"]
+OrderStatus = Literal["pending", "paid", "held", "cancelled", "pending_refund"]
 
 _client: Client | None = None
 

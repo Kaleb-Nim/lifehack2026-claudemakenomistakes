@@ -175,6 +175,7 @@
       const action = query.get("action") || "visa:confirm";
       const orderId = query.get("order_id") || null;
       const isCancellation = action === "cancel:confirm";
+      const isRefund = query.get("cancellation_kind") === "refund";
       const product = document.getElementById("product");
       const pageTitle = document.getElementById("page-title");
       const pageDescription = document.getElementById("page-description");
@@ -183,9 +184,11 @@
 
       if (isCancellation) {
         document.title = "Secure cancellation confirmation";
-        pageTitle.textContent = "Confirm Transaction Cancellation";
-        pageDescription.textContent = "Verify your identity to cancel this transaction and initiate the refund.";
-        amountLabel.textContent = "Refund";
+        pageTitle.textContent = isRefund ? "Confirm Refund Request" : "Confirm Transaction Cancellation";
+        pageDescription.textContent = isRefund
+          ? "Verify your identity to cancel this paid order and submit its refund."
+          : "Verify your identity to cancel this unpaid order.";
+        amountLabel.textContent = isRefund ? "Refund" : "Order amount";
       }
 
       if (label) {
