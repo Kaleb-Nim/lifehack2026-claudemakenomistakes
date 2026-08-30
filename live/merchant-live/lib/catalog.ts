@@ -331,7 +331,11 @@ export async function publish(
         ${row.product_url}, ${row.image_url}, now(), ${row.source}
       )
       ON CONFLICT (merchant_slug, source_handle) DO UPDATE SET
-        merchant_name = EXCLUDED.merchant_name,
+        -- Keep the name already on the row. Publishing under a placeholder
+        -- once renamed 40 of a scraped merchant's products to "your shop":
+        -- the slug resolved to their existing rows and this line overwrote
+        -- them. A rename is a deliberate act, not a side effect of an import.
+        merchant_name = public.catalog_products.merchant_name,
         title = EXCLUDED.title,
         description = COALESCE(
           NULLIF(EXCLUDED.description, ''), public.catalog_products.description

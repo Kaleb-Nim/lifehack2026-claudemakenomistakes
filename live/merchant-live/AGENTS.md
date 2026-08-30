@@ -199,6 +199,27 @@ Bizgram no matter who called. It now describes how to *elicit* those facts —
 who they are, what they sell, where their data already lives, and what a photo
 cannot answer — and states plainly that it does not know the shop yet.
 
+## Publishing must never rename another merchant's rows
+
+The upsert keeps the `merchant_name` already on the row rather than taking
+`EXCLUDED.merchant_name`. This is not a style choice: publishing under a
+placeholder once renamed 40 of a scraped merchant's products to "your shop",
+because `findMerchantSlugByDomain()` correctly resolved them to that shop's
+existing slug and the upsert then overwrote the name on every row it touched.
+A rename is a deliberate act, not a side effect of an import.
+
+For the same reason the research route identifies the shop **even when a domain
+is supplied**. A domain says where to read, not who they are; skipping
+identification left products filed under whatever the caller happened to send.
+
+## The identified name is shown
+
+Once the lookup resolves the shop, its name appears bold and centred in the
+header (`.hdr-shop`). It is absent until then rather than showing a
+placeholder, so its appearance means something: we now know who we are talking
+to. `ingest.identifiedName` carries it, and it takes precedence over anything
+configured, because it came from the shop itself.
+
 ## The onboarding UI is wired to it
 
 The drop bar used to call `simulateUpload()`, which only nudged the beat

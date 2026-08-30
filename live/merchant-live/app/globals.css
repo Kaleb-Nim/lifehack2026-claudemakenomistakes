@@ -297,3 +297,27 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 @keyframes ingest-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ingest-spinner { animation: none; } }
+
+/* The shop's own name, centred in the header. Appears only once the lookup has
+   identified them, so it reads as a fact established rather than a field
+   waiting to be filled. .hdr is space-between, hence absolute centring. */
+.hdr { position: relative; }
+.hdr-shop {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+  white-space: nowrap;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: hdr-shop-in 420ms ease-out both;
+}
+@keyframes hdr-shop-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .hdr-shop { animation: none; } }

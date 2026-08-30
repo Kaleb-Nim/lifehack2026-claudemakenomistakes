@@ -38,6 +38,14 @@ export interface IngestState {
   skipped: number;
   /** What was read — a filename or a domain — so the UI can name the source. */
   lastSource: string;
+  /**
+   * The shop's own name, once the lookup has worked it out.
+   *
+   * Not the same as the name the caller passed in: that may be a placeholder,
+   * and the point of identification is to replace it with what the shop is
+   * actually called.
+   */
+  identifiedName: string | null;
   error: string | null;
 }
 
@@ -49,6 +57,7 @@ const IDLE: IngestState = {
   followUp: null,
   skipped: 0,
   lastSource: "",
+  identifiedName: null,
   error: null,
 };
 
@@ -177,6 +186,7 @@ export function useIngest(merchantName: string) {
         set({
           status: "done",
           progress: "",
+          identifiedName: result.identity?.name ?? result.merchantName ?? null,
           published: result.published ?? [],
           gaps: result.gaps ?? [],
           followUp: result.followUp ?? null,

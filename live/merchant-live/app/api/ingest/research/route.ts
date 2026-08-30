@@ -70,10 +70,13 @@ export async function POST(request: Request) {
       // the lookup finds it, so a placeholder never becomes a merchant.
       let merchantName = requestedName;
 
-      if (!domain) {
+      // Identify whenever we can, even with a domain in hand: the domain tells
+      // us where to read, not who they are, and skipping this left products
+      // filed under whatever placeholder the caller sent.
+      if (!domain || !merchantName) {
         await setProgress(job.id, "Looking up your shop online…");
-        identity = await identifyMerchant(transcript);
-        domain = identity.domain;
+        identity = await identifyMerchant(transcript || domain || "");
+        domain = domain || identity.domain;
         // Prefer the name the shop is actually known by. The caller may have
         // sent a placeholder, or nothing at all.
         if (identity.name && (!merchantName || identity.confidence === "high")) {

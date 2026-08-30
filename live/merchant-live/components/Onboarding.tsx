@@ -131,6 +131,9 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
   // rather than refusing.
   const ingestName = merchantName.trim() || "Your shop";
   const ingest = useIngest(ingestName);
+  // What the shop is actually called. The lookup's answer wins over anything
+  // configured, because it came from the shop itself.
+  const shopName = ingest.identifiedName || merchantName.trim() || "";
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const onPickFiles = () => fileInput.current?.click();
@@ -209,6 +212,10 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
         {/* Header */}
         <div className="hdr">
           <div className="hdr-brand">{PRODUCT_NAME}</div>
+          {/* The shop's own name, once the lookup has found it. Absent until
+              then rather than showing a placeholder, so the moment it appears
+              means something: we know who we are talking to. */}
+          {shopName && <div className="hdr-shop">{shopName}</div>}
           <div className="hdr-chip"><div className="hdr-dot" /><span>{header}</span></div>
         </div>
 
