@@ -8,16 +8,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  CATALOGUE_COUNT, HERO, LIVE_LINE, PRODUCTS, PRODUCT_NAME, SHOP_NAME,
-  type LogLine,
-} from "../lib/merchant-data";
+import { PRODUCT_NAME, type Card, type LogLine } from "../lib/merchant-data";
 import { CARD_STAGGER_MS } from "../lib/frame-timing";
 import { WORK_THINK_MS, WORK_THINK_TRACE } from "../lib/agent-script";
 import { useOnboardingState } from "../hooks/useOnboardingState";
 import { useIngest } from "../hooks/useIngest";
 import IngestPanel from "./IngestPanel";
 import { useBeatRunner } from "../lib/beat-runner";
+
+const OPENING_LINE =
+  "Hi, I'm the agent for electronics shops. Tell me about your shop, or drop anything you have — a price list, photos of your shelves, your website. I'll do the sorting.";
+const DROP_HINT = "Whatever you already have. I'll read it and tell you what's missing.";
 
 const MARK: Record<LogLine["mark"], string> = { ok: "✓", q: "?", flag: "!", struck: "✓" };
 
@@ -60,12 +61,14 @@ function useTypewriter(text: string | undefined, cps = 28) {
 }
 
 export default function Onboarding({ merchantName = "" }: { merchantName?: string }) {
-  const { idx, frame, prev, live, setLive, reading, over, setOver, scale, go, logDelay, isOpen, toggle, setRepeatHandler } = useOnboardingState();
+  const { live, setLive, reading, over, setOver, scale, isOpen, toggle, setRepeatHandler } = useOnboardingState();
   // ?mode=scripted skips the session entirely (CONTEXT.md) — the backup recording path for
   // shoot day, so tapping the orb here must never attempt a mic/key/WebRTC handshake.
   const scriptedMode = useSearchParams().get("mode") === "scripted";
   const audioRef = useRef<HTMLAudioElement>(null);
-  const voice = useBeatRunner({ idx, frame, go }, audioRef);
+  // The beat runner still governs when the agent takes a turn, but there is no
+  // longer a frame table for it to walk, so its advance is a no-op.
+  const voice = useBeatRunner({ idx: 0, frame: { key: "live" }, go: () => {} }, audioRef);
   // Hand the `R` key's handler to useOnboardingState's keyboard effect, which has no voice
   // driver of its own to call.
   useEffect(() => {
@@ -81,18 +84,17 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
   const voiceThinking = voice.phase === "live" && voice.thinking !== null;
   const voiceActive = voiceConnecting || voice.phase === "live";
 
-  const caption = useTypewriter(frame.caption);
-  const typing = !!frame.caption && caption.length < frame.caption.length;
+  const typing = false;
   // Voice mode: the caption block is driven by the runner's real transcript instead of the
   // fixed-text typewriter (VOICE-03) — visible whenever there is owner speech to show, caret
   // blinking only while the turn is still open (session.hearing). Scripted mode's condition
   // and useTypewriter output are untouched, byte for byte.
-  const captionText = voice.phase === "live" ? (voice.caption ?? "") : caption;
-  const captionVisible = voice.phase === "live" ? !!voice.caption : (!!frame.caption && !live && !voiceActive);
-  const captionCaretOn = voice.phase === "live" ? voice.hearing : true;
+  const captionText = voice.caption ?? "";
+  const captionVisible = !!voice.caption;
+  const captionCaretOn = voice.hearing;
   // Rolling history of finalized owner turns (QUICK-caption-history.md) — real-session-only;
   // ?mode=scripted's typewriter caption stays exactly as it was (VOICE-05, byte-identical).
-  const captionHistory = voice.phase === "live" ? voice.captionHistory : [];
+  const captionHistory = voice.captionHistory;
   // Real session states take priority; a session that never started (idle) or that
   // dropped back to scripted mode falls through to the exact Phase 1 derivation
   // (UI-SPEC §1, priority table row 5) — one chain, no parallel orb-state variable.
@@ -101,31 +103,30 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
     : voiceHearing ? "listening"
     : voiceThinking ? "thinking"
     : voice.phase === "live" ? "idle"
-    : live ? "speaking" : typing ? "listening" : frame.orb;
+    : live ? "speaking" : "idle";
   const orbLabel = voiceConnecting ? "Connecting…"
     : voiceSpeaking ? "Speaking"
     : voiceHearing ? "Listening to you"
     : voiceThinking ? "Thinking…"
     : voice.phase === "live" ? "Your turn — go ahead"
-    : live ? "Speaking" : typing ? "Listening to you" : frame.orbLabel;
-  const agentLine = live ? LIVE_LINE : frame.agentLine;
-  const header = live ? "Live" : frame.header;
+    : live ? "Speaking" : "Tap the circle, or just start talking";
+  const agentLine = live
+    ? "You're live — shoppers can find you now."
+    : voice.phase === "live"
+      ? ""
+      : OPENING_LINE;
+  const header = live ? "Live" : voiceActive ? "Live session" : "Idle";
 
-  // Drop bar → simulate the uploads landing. In a live session this is beat B's own
-  // "upload" signal (lib/beat-runner.ts fires the runner's tools and walks the cursor
-  // itself); in scripted mode / before the orb is ever tapped it keeps the exact Phase 1
-  // behaviour of jumping straight to State C.
-  // Keep the scripted beat moving, whatever the real ingest does: the screen
-  // should advance the moment files land, not when the crawl finishes.
+  // Tell a live session that files landed, so the agent can react. There is no
+  // frame to advance any more — the screen reflects what actually happened.
   const advanceBeat = () => {
-    if (voice.phase === "live") { voice.notify("upload"); return; }
-    if (idx < 2) go(2);
+    if (voice.phase === "live") voice.notify("upload");
   };
 
   // The name products are filed under. Falls back to what the shop is called
   // on screen, so an unconfigured deployment still publishes somewhere sane
   // rather than refusing.
-  const ingestName = merchantName.trim() || SHOP_NAME;
+  const ingestName = merchantName.trim() || "Your shop";
   const ingest = useIngest(ingestName);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
@@ -151,6 +152,48 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
 
   // Nothing uploaded and nothing typed — work out which shop they are from
   // what they have said so far.
+  // Left panel: what the agent has established. Published products are settled
+  // facts; gaps are open questions. Both come from the real ingest, so an empty
+  // panel means nothing has been read yet.
+  const log: LogLine[] = [
+    ...ingest.published.map((prod): LogLine => ({
+      mark: "ok",
+      text: `${prod.title} · ${prod.priceDisplay}`,
+    })),
+    ...ingest.gaps.map((gap): LogLine => ({ mark: "q", text: gap.question })),
+  ];
+
+  // Right panel: one card per thing read, showing what came out of it.
+  const cards: Card[] =
+    ingest.status === "idle"
+      ? []
+      : [
+          {
+            file: ingest.lastSource || "Your catalogue",
+            what:
+              ingest.status === "working"
+                ? ingest.progress || "Reading…"
+                : `${ingest.published.length} product${ingest.published.length === 1 ? "" : "s"} read`,
+            status:
+              ingest.status === "error"
+                ? "couldn't read"
+                : ingest.status === "working"
+                  ? "reading…"
+                  : `${ingest.published.length} added`,
+            live: ingest.gaps.length > 0,
+            summary:
+              ingest.status === "error"
+                ? (ingest.error ?? "")
+                : ingest.gaps.length > 0
+                  ? `${ingest.gaps.length} still need details`
+                  : "Everything readable was added.",
+            lines: ingest.published
+              .slice(0, 12)
+              .map((prod) => `${prod.title}  ${prod.priceDisplay}`)
+              .join("\n"),
+          },
+        ];
+
   const onFindMyShop = () => {
     const said = [...captionHistory, captionText].filter(Boolean).join(" ").trim();
     advanceBeat();
@@ -171,14 +214,14 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
           <div className="left">
             <div className="left-head">
               <div className="col-label">Locked in</div>
-              <div className="left-count">{frame.log.length ? `${frame.log.length} decisions · editable` : ""}</div>
+              <div className="left-count">{log.length ? `${log.length} decisions · editable` : ""}</div>
             </div>
-            {frame.log.length === 0 && (
+            {log.length === 0 && (
               <div className="col-empty" style={{ maxWidth: 330 }}>Nothing yet. Everything I understand shows up here — you can edit or remove any line.</div>
             )}
             <div className="log">
-              {frame.log.map((l) => (
-                <div key={l.text} className={`row ${l.mark}${l.tools ? " tools" : ""}`} style={{ animationDelay: `${logDelay(l)}ms` }}>
+              {log.map((l, i) => (
+                <div key={l.text} className={`row ${l.mark}${l.tools ? " tools" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
                   <div className="row-mark">{MARK[l.mark]}</div>
                   <div className="row-text">{l.text}</div>
                   {l.tools ? (
@@ -259,29 +302,22 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
                   </div>
                 )
               )}
-              {frame.pills && !live && (
-                <div className="pills">
-                  {frame.pills.map((p) => (
-                    <button key={p.label} className={`pill${p.primary ? " primary" : ""}`} onClick={() => (voice.phase === "live" ? voice.notify("pill") : go(idx + 1))}>{p.label}</button>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 
           {/* Right — Context / listing */}
           <div className="right">
-            <div className="col-label">{frame.rightLabel ?? "Context"}</div>
-            {frame.cards.length === 0 && !frame.listing && (
+            <div className="col-label">Context</div>
+            {cards.length === 0 && (
               <div className="col-empty" style={{ maxWidth: 380 }}>Files, photos and links appear here as plain rows. Open one to see exactly what I read.</div>
             )}
 
-            {frame.cards.length > 0 && (
+            {cards.length > 0 && (
               <div className="cards">
-                {frame.cards.map((c, i) => {
+                {cards.map((c, i) => {
                   const isReading = reading.has(c.file);
                   const open = !isReading && isOpen(c);
-                  const delay = (prev?.cards ?? []).some((p) => p.file === c.file) ? 0 : i * CARD_STAGGER_MS;
+                  const delay = i * CARD_STAGGER_MS;
                   return (
                     <button key={c.file} className={`card${open ? " open" : ""}`} style={{ animationDelay: `${delay}ms` }} onClick={() => !isReading && toggle(c)}>
                       <div className="card-head">
@@ -308,44 +344,21 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
               </div>
             )}
 
-            {frame.listing && (
-              <div className="listing">
-                <div className="hero">
-                  <div className="hero-head">
-                    <div className="hero-name">{HERO.name}</div>
-                    <div className="hero-price"><b>{HERO.price}</b></div>
-                  </div>
-                  <div className="hero-specs">{HERO.specs.map((s) => <div key={s}>{s}</div>)}</div>
-                  <div className="hero-foot"><div>{HERO.stock}</div><div>{HERO.extra}</div></div>
-                  <div className="hero-foot"><div>{HERO.collect}</div></div>
-                </div>
-                <div className="products">
-                  {PRODUCTS.map((p, i) => (
-                    <div key={p.name} className="product" style={{ animationDelay: `${300 + i * 90}ms` }}>
-                      <div className="product-name">{p.name}</div>
-                      {p.priceNote && <div className="product-tag">{p.priceNote}</div>}
-                      <div className="product-price">{p.price}</div>
-                      <div className="product-stock">{p.stock}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
         {/* Bottom — Go live / composer */}
         <div className="foot">
-          {frame.goLive ? (
+          {log.length > 0 && ingest.published.length > 0 ? (
             <div className="golive">
               <button className={`golive-btn${live ? " done" : ""}`} onClick={() => { if (voice.phase === "live") voice.notify("operator"); setLive(true); }}>
-                {live ? `Live — shoppers can find ${SHOP_NAME}` : `Go live — shoppers can find ${SHOP_NAME}`}
+                {live ? `Live — shoppers can find ${ingestName}` : `Go live — shoppers can find ${ingestName}`}
               </button>
-              <div className="golive-note">{CATALOGUE_COUNT} products · readable by the shopping agent</div>
+              <div className="golive-note">{ingest.published.length} products · readable by the shopping agent</div>
             </div>
           ) : (
             <div className="drop">
-              <div className="drop-hint">{frame.dropText}</div>
+              <div className="drop-hint">{DROP_HINT}</div>
               <div
                 className={`drop-bar${over ? " over" : ""}`}
                 onDragOver={(e) => { e.preventDefault(); setOver(true); }}

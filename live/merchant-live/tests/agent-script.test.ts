@@ -3,14 +3,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { BEATS, TOOLS } from "../lib/agent-script";
-import { FRAMES } from "../lib/merchant-data";
 
 describe("agent-script", () => {
-  test("BEATS has exactly 8 entries, zipped to FRAMES by key", () => {
-    expect(BEATS).toHaveLength(8);
-    expect(BEATS.map((b) => b.key)).toEqual(["A", "B", "C", "D", "E", "F", "F2", "G"]);
-    expect(BEATS.map((b) => b.key)).toEqual(FRAMES.map((f) => f.key));
-  });
 
   test("advanceOn matches the shoot's five conditions, one per beat", () => {
     expect(BEATS.map((b) => b.advanceOn)).toEqual([
@@ -31,13 +25,6 @@ describe("agent-script", () => {
     expect(beatC!.minDwellMs!).toBeGreaterThan(8500);
   });
 
-  test("every beat has a non-empty owner cue; G's is the exact end-of-script string", () => {
-    for (const beat of BEATS) {
-      expect(beat.ownerCue.length).toBeGreaterThan(0);
-    }
-    const beatG = BEATS.find((b) => b.key === "G");
-    expect(beatG?.ownerCue).toBe("— end of script —");
-  });
 
   test("the union of tools[].name across BEATS covers all seven tool names", () => {
     const used = new Set(BEATS.flatMap((b) => b.tools.map((t) => t.name)));

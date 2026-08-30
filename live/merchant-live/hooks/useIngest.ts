@@ -36,6 +36,8 @@ export interface IngestState {
   followUp: string | null;
   /** Products understood but not published, e.g. no price. */
   skipped: number;
+  /** What was read — a filename or a domain — so the UI can name the source. */
+  lastSource: string;
   error: string | null;
 }
 
@@ -46,6 +48,7 @@ const IDLE: IngestState = {
   gaps: [],
   followUp: null,
   skipped: 0,
+  lastSource: "",
   error: null,
 };
 
@@ -74,7 +77,7 @@ export function useIngest(merchantName: string) {
         set({ status: "error", error: "Tell me your shop's name first." });
         return;
       }
-      set({ ...IDLE, status: "working", progress: `Reading ${file.name}…` });
+      set({ ...IDLE, status: "working", lastSource: file.name, progress: `Reading ${file.name}…` });
 
       try {
         const form = new FormData();
@@ -117,6 +120,7 @@ export function useIngest(merchantName: string) {
       set({
         ...IDLE,
         status: "working",
+        lastSource: domain || "Your shop online",
         progress: domain ? `Reading ${domain}…` : "Looking up your shop online…",
       });
 

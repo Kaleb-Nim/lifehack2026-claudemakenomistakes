@@ -167,6 +167,38 @@ torn down, and a merchant cannot tell a slow import from a dead one.
 
 ## Still canned
 
+## There is no script
+
+`FRAMES` is gone. It was a seven-frame table that played one shop's story on a
+timer: the screen advanced whether or not anything had happened, and it
+advanced into Bizgram Asia regardless of who was on the call.
+
+The screen is now driven by what actually happened:
+
+| Region | Source |
+|---|---|
+| Header, orb, captions | the live voice session |
+| Locked in (left) | published products and gaps from the real ingest |
+| Context (right) | one card per source read, with its result |
+| Go live | appears only once products are actually published |
+
+An empty screen means nothing has happened yet, which is the truth. Removed
+with it: the pill questions and the hero/product listing, both scripted with no
+live equivalent; `ownerCue` on each beat, which was an operator teleprompter
+field never read at runtime; and the frame-diffing helpers in
+`lib/frame-timing.ts`, which had nothing left to diff.
+
+`BEATS` stays — it governs when the agent takes a turn, not what the screen
+says.
+
+**`lib/agent-context.md` was rewritten too.** It is the live agent's brain, read
+fresh on every session, and it used to contain a Bizgram fact table under the
+instruction "everything below is what you already know about this shop, and you
+must never contradict it". So the live voice agent believed it was talking to
+Bizgram no matter who called. It now describes how to *elicit* those facts —
+who they are, what they sell, where their data already lives, and what a photo
+cannot answer — and states plainly that it does not know the shop yet.
+
 ## The onboarding UI is wired to it
 
 The drop bar used to call `simulateUpload()`, which only nudged the beat

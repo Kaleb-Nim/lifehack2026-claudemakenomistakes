@@ -9,7 +9,6 @@
 // merchant-data.ts stays additive-only; agentLine/log/card copy there is the single source
 // of truth for on-screen text.
 
-import { FRAMES } from "./merchant-data";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type ToolName =
@@ -60,7 +59,6 @@ export interface Beat {
    */
   minDwellMs?: number;
   /** The owner's expected next line or action, shown on the operator teleprompter (plan 02-03). */
-  ownerCue: string;
   /**
    * Which think-pause tier a reply requested while this beat is current uses (see
    * ThinkTier above). Omitted means "beat" — the ordinary, orb-only pause. Only beat C
@@ -153,7 +151,7 @@ export const TOOL_HANDLERS: Record<ToolName, (args: Record<string, unknown>) => 
 const tool = (name: ToolName, args: Record<string, unknown>, atMs?: number): BeatToolCall =>
   (atMs === undefined ? { name, args } : { name, args, atMs });
 
-// ── The beats, A → G, zipped to FRAMES by key ────────────────────────────────
+// ── The beats, A → G ─────────────────────────────────────────────────────────
 // Each beat's `tools` fire once, at the moment its own advanceOn condition is met — i.e.
 // they produce whatever becomes newly visible on the frame being entered next. The screen
 // itself never reads these; frame.log/frame.cards (lib/merchant-data.ts) are what render.
@@ -162,7 +160,6 @@ export const BEATS: Beat[] = [
   {
     key: "A",
     advanceOn: "speech_stopped",
-    ownerCue: FRAMES[1].caption ?? "",
     tools: [
       tool("lock_fact", { fact: "Shop: Bizgram Asia · Sim Lim Square #05-50" }),
       tool("lock_fact", { fact: "Sells: laptops + components (HDD, GPU, servers)" }),
@@ -172,7 +169,6 @@ export const BEATS: Beat[] = [
   {
     key: "B",
     advanceOn: "upload",
-    ownerCue: "Drop the price-list PDF, the Acer promo sheet, the three shelf photos, and paste the website URL.",
     tools: [
       tool("search_web", { query: "bizgram.com" }),
       tool("read_source", { source: "001 Bizgram Asia Pricelist August 29, 2026.pdf" }),
@@ -190,7 +186,6 @@ export const BEATS: Beat[] = [
     // the frame must not move until the reading ladder has finished, whatever the agent's
     // own audio does.
     minDwellMs: 9000,
-    ownerCue: "Stay quiet and let me finish reading — I'll flag anything I'm not sure about.",
     // The one beat where the reply pause is motivated on screen (QUICK-agent-thinking-time.md):
     // this is the "agent reads the sources" beat, so its reply gets the Work-tier pause
     // (progress bar + trace lines) instead of the ordinary orb-only Beat-tier pause.
@@ -205,7 +200,6 @@ export const BEATS: Beat[] = [
   {
     key: "D",
     advanceOn: "speech_stopped",
-    ownerCue: FRAMES[3].caption ?? "",
     tools: [
       tool("lock_fact", { fact: "Warranty: 2-yr carry-in via shop · 7-day DOA exchange" }),
       tool("lock_fact", { fact: "Services: SSD/RAM upgrades in shop, same day, free install w/ purchase" }),
@@ -215,7 +209,6 @@ export const BEATS: Beat[] = [
   {
     key: "E",
     advanceOn: "speech_stopped",
-    ownerCue: FRAMES[4].caption ?? "",
     tools: [
       tool("lock_fact", { fact: "Aspire Go 15 = display set, last unit, full warranty, no box" }),
       tool("ask_pill", {
@@ -227,7 +220,6 @@ export const BEATS: Beat[] = [
   {
     key: "F",
     advanceOn: "pill",
-    ownerCue: "Tap a pill — \"Only my products\" or \"Closest match + explain\".",
     tools: [
       tool("lock_fact", { fact: "Below-budget: show closest match + explain" }),
       tool("ask_pill", {
@@ -239,7 +231,6 @@ export const BEATS: Beat[] = [
   {
     key: "F2",
     advanceOn: "pill",
-    ownerCue: "Tap a pill — \"Pay in chat, collect at #05-50\" or \"WhatsApp me first\".",
     tools: [
       tool("lock_fact", { fact: "Checkout: pay in chat (Visa, card price) → collect at #05-50 · PayNow option kept" }),
     ],
@@ -247,7 +238,6 @@ export const BEATS: Beat[] = [
   {
     key: "G",
     advanceOn: "operator",
-    ownerCue: "— end of script —",
     tools: [tool("go_live", {})],
   },
 ];
@@ -286,14 +276,6 @@ export const SETTLE_MS = 400;      // pause before the agent's next line starts
 export const AUDIO_TIMEOUT_MS = 2000; // no audio within this window of response.create = dropped session
 
 // ── Think-pause timing (QUICK-agent-thinking-time.md) ───────────────────────
-// FRAMES total exactly 150s against a ~2:00 target cut (lib/merchant-data.ts `seconds`
-// fields) — there is almost no slack, so the reply pause is motivated, not uniform. A
-// uniform ~5s pause on every one of the ~6 speech-driven turns would burn ~30s, a fifth of
-// the runtime. Instead: a short Beat-tier pause (orb only) on every ordinary turn, and a
-// longer Work-tier pause (orb + bar + trace) only on beat C, the one beat where the agent is
-// visibly doing something (reading the uploaded sources) rather than just talking. Both are
-// requested inside lib/beat-runner.ts's sendResponseCreate — the sole response.create site —
-// as a delay before that send, never as a second send site or an `instructions` override.
 export const BEAT_THINK_MS = 700;  // ordinary turn: orb -> "thinking", no bar, no text
 export const WORK_THINK_MS = 4500; // beat C only: orb "thinking" + progress bar + trace lines
 
