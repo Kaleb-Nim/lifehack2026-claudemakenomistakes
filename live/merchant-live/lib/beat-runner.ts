@@ -48,9 +48,11 @@ export type ExternalAdvanceSignal = Extract<AdvanceOn, "upload" | "pill" | "oper
 export interface BeatRunnerApi {
   phase: SessionPhase;
   failure: SessionFailure;
+  muted: boolean;
   speaking: boolean;
   hearing: boolean;
   connect: () => void;
+  toggleMute: () => void;
   /**
    * Operator override (key `R`, wired from hooks/useOnboardingState.ts): nudges a stalled
    * agent to speak again with a fresh bare reply, or — if the session has dropped —
@@ -424,9 +426,11 @@ export function useBeatRunner(onboarding: BeatRunnerOnboarding, audioRef: RefObj
   return {
     phase: session.phase,
     failure: session.failure,
+    muted: session.muted,
     speaking: session.speaking,
     hearing: session.hearing,
     connect: session.connect,
+    toggleMute: session.toggleMute,
     repeat,
     notify,
     beatNumber: beatIndex + 1,

@@ -38,6 +38,8 @@ const CHEV = ["m6 9 6 6 6-6"];
 const OPEN = ["M7 17 17 7", "M7 7h10v10"];
 const UPLOAD = ["M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7", "M12 3v13", "m7 8 5-5 5 5"];
 const TYPE = ["M4 7V5h16v2", "M9 19h6", "M12 5v14"];
+const MIC = ["M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z", "M19 10v2a7 7 0 0 1-14 0v-2", "M12 19v3", "M8 22h8"];
+const MIC_OFF = ["m2 2 20 20", "M18.89 18.89A7 7 0 0 1 5 12v-2", "M15 9.34V5a3 3 0 0 0-5.68-1.33", "M9 9v3a3 3 0 0 0 5.12 2.12", "M12 19v3", "M8 22h8"];
 
 // ── Typewriter for the owner's live caption ─────────────────────────────────
 function useTypewriter(text: string | undefined, cps = 28) {
@@ -81,6 +83,7 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
   const voiceConnecting = voice.phase === "connecting";
   const voiceSpeaking = voice.phase === "live" && voice.speaking;
   const voiceHearing = voice.phase === "live" && voice.hearing;
+  const voiceMuted = voice.phase === "live" && voice.muted;
   // The agent's think pause (QUICK-agent-thinking-time.md) — `voiceHearing` above always
   // takes priority, since a fresh owner turn cancels the pending think (lib/beat-runner.ts)
   // the instant it starts, so the two are never visually in conflict.
@@ -103,12 +106,14 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
   // (UI-SPEC §1, priority table row 5) — one chain, no parallel orb-state variable.
   const orbState = voiceConnecting ? "connecting"
     : voiceSpeaking ? "speaking"
+    : voiceMuted ? "idle"
     : voiceHearing ? "listening"
     : voiceThinking ? "thinking"
     : voice.phase === "live" ? "idle"
     : live ? "speaking" : "idle";
   const orbLabel = voiceConnecting ? "Connecting…"
     : voiceSpeaking ? "Speaking"
+    : voiceMuted ? "Microphone off"
     : voiceHearing ? "Listening to you"
     : voiceThinking ? "Thinking…"
     : voice.phase === "live" ? "Your turn — go ahead"
@@ -266,6 +271,18 @@ export default function Onboarding({ merchantName = "" }: { merchantName?: strin
               <div className="orb-ring ring-d"><div /></div>
             </div>
             <div className="centre-text">
+              {voice.phase === "live" && (
+                <button
+                  type="button"
+                  className={`listen-toggle${voice.muted ? " muted" : ""}`}
+                  onClick={voice.toggleMute}
+                  aria-pressed={voice.muted}
+                  title={voice.muted ? "Let the agent hear your microphone again" : "Stop sending microphone audio to the agent"}
+                >
+                  <Svg d={voice.muted ? MIC_OFF : MIC} size={17} stroke="currentColor" w={2} />
+                  <span>{voice.muted ? "Resume listening" : "Pause listening"}</span>
+                </button>
+              )}
               <div className="orb-label">{orbLabel}</div>
               <div className="agent-line" key={agentLine}>{agentLine}</div>
               {/* Work-tier think (QUICK-agent-thinking-time.md) — only on beat C's post-upload
