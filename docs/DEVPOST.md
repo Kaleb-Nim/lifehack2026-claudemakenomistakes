@@ -1,5 +1,7 @@
 # Pluto
 
+![The team building Pluto through the night at LifeHack 2026](team-build.jpg)
+
 **The onboarding layer that makes small shops findable by AI agents.**
 
 LifeHack 2026 · NUS School of Computing · Visa Digital Payments track
