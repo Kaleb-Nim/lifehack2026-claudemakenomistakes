@@ -17,7 +17,7 @@ const env = (key: string): string | undefined =>
 const name = env("MERCHANT_NAME");
 
 export const MERCHANT = {
-  // docs/CANONICAL-DEMO-DATA.md §1: the product is Cashew, never Pluto.
+  // docs/CANONICAL-DEMO-DATA.md §1: the product is Cashew, never Cashew.
   product: "Cashew",
   /** Display name. Falls back to neutral copy rather than inventing a shop. */
   name: name ?? "Your shop",

@@ -1,6 +1,6 @@
-# Pluto
+# Cashew
 
-![The team building Pluto through the night at LifeHack 2026](team-build.jpg)
+![The team building Cashew through the night at LifeHack 2026](team-build.jpg)
 
 **AI powered dual interface engine that makes onboarding of merchants & consumers seemless**
 
@@ -39,9 +39,9 @@ In Singapore that is **356,600 SMEs — 99% of all businesses, ~70% of the workf
 
 ## Our Solution
 
-**Pluto is the five-minute on-ramp.** A merchant converses to a voice agent. No dashboard, no forms, no CSV templates.
+**Cashew is the five-minute on-ramp.** A merchant converses to a voice agent. No dashboard, no forms, no CSV templates.
 
-Pluto researches the shop from nothing but its name, reads whatever the merchant uploads — photos, a PDF price list, a WhatsApp screenshot of a supplier sheet — and asks only for what it genuinely cannot work out. Then the shop is live inside a category agent that shoppers talk to on Telegram, with checkout settled in-chat on Visa.
+Cashew researches the shop from nothing but its name, reads whatever the merchant uploads — photos, a PDF price list, a WhatsApp screenshot of a supplier sheet — and asks only for what it genuinely cannot work out. Then the shop is live inside a category agent that shoppers talk to on Telegram, with checkout settled in-chat on Visa.
 
 > We replaced the catalogue dashboard with a conversation, because the merchants who need this most are exactly the ones who will never finish a dashboard.
 
@@ -70,7 +70,7 @@ Pluto researches the shop from nothing but its name, reads whatever the merchant
 
 ```
                     ┌──────────────────────────────┐
-   MERCHANT ───────▶│  Pluto onboarding (voice)     │
+   MERCHANT ───────▶│  Cashew onboarding (voice)     │
    (Sim Lim shop)   │  Next.js 16 · OpenAI Realtime │
                     └──────────────┬───────────────┘
                                    │ web research · photos · PDF price list
@@ -112,35 +112,35 @@ Pluto researches the shop from nothing but its name, reads whatever the merchant
 
 ### 1. The merchant talks
 
-A shop owner opens Pluto and is asked one question: *what's your shop called?* That is the entire required input.
+A shop owner opens Cashew and is asked one question: *what's your shop called?* That is the entire required input.
 
 <!-- PHOTO 4 — Someone actually speaking to the screen. A person mid-sentence
      with the waveform live reads far better than a static UI shot. -->
 
-### 2. Pluto researches them first
+### 2. Cashew researches them first
 
-From the name alone, Pluto searches the web and reports back what it found — the Google listing, the Carousell seller page, the Facebook page that stopped posting in 2023 — and asks the merchant to confirm or correct it. It arrives already knowing things, instead of demanding the merchant type them.
+From the name alone, Cashew searches the web and reports back what it found — the Google listing, the Carousell seller page, the Facebook page that stopped posting in 2023 — and asks the merchant to confirm or correct it. It arrives already knowing things, instead of demanding the merchant type them.
 
 ### 3. The merchant uploads whatever they have
 
-Shelf photos. A nine-page PDF price list. A screenshot of a supplier's WhatsApp message. Pluto rasterises PDF pages, reads the images, and reconciles them against what it found online — including catching that the website's prices are six months stale.
+Shelf photos. A nine-page PDF price list. A screenshot of a supplier's WhatsApp message. Cashew rasterises PDF pages, reads the images, and reconciles them against what it found online — including catching that the website's prices are six months stale.
 
-### 4. Pluto closes its own gaps
+### 4. Cashew closes its own gaps
 
-This is the part that makes the data good enough to be found. Pluto reasons about what it *cannot* see and asks for exactly that, in the merchant's own commercial terms:
+This is the part that makes the data good enough to be found. Cashew reasons about what it *cannot* see and asks for exactly that, in the merchant's own commercial terms:
 
 > *"Photo four — I can see it's a Sony pair of earbuds, but the model sticker is facing away. Turn the box and shoot the side label? The model number is what people actually type when they search."*
 
 > *"The cable's coiled up so I can't see the ends. Lay it flat and shoot both connectors — if I guess Lightning and it's USB-C, someone buys wrong and brings it back to your counter."*
 
-**Every request has a Skip button.** The merchant can decline anything, say why, and Pluto accepts it, states the cost once, parks the item in an "Add later" list with their reason, and never asks again. An agent that insists is worse than the form we replaced.
+**Every request has a Skip button.** The merchant can decline anything, say why, and Cashew accepts it, states the cost once, parks the item in an "Add later" list with their reason, and never asks again. An agent that insists is worse than the form we replaced.
 
 <!-- PHOTO 5 — The gap-closing moment on screen: a flagged thumbnail with
-     Pluto's request and the Skip button visible. -->
+     Cashew's request and the Skip button visible. -->
 
 ### 5. Standing rules, then Visa
 
-Before going live the merchant sets the rules every sale must follow — price floor, return policy, mandatory disclosures like parallel-import status. Pluto states all of them to the shopper **before** payment, never after. Then bank details, and the shop is live.
+Before going live the merchant sets the rules every sale must follow — price floor, return policy, mandatory disclosures like parallel-import status. Cashew states all of them to the shopper **before** payment, never after. Then bank details, and the shop is live.
 
 ### 6. Shoppers just ask
 
@@ -155,7 +155,7 @@ A Telegram Mini App handles the simulated Visa payment: biometric passkey → tr
 
 ### 8. The merchant sees it land
 
-The payments dashboard polls `/api/orders` every five seconds. A sale closed in a Pluto chat appears on the merchant's dashboard seconds later, with no refresh — collected, held, processing fees and next payout all computed from the live rows.
+The payments dashboard polls `/api/orders` every five seconds. A sale closed in a Cashew chat appears on the merchant's dashboard seconds later, with no refresh — collected, held, processing fees and next payout all computed from the live rows.
 
 <!-- PHOTO 7 — Two screens side by side: the shopper paying on the phone and
      the sale appearing on the merchant dashboard. This is the money shot. -->
@@ -260,7 +260,7 @@ docs/                               # Problem statement, mentor notes, scripts, 
 
 **Voice over dashboard.** The target user abandons forms. A conversation is not a gimmick here — it is the only interface that fits a merchant with 10,000 SKUs and no IT staff.
 
-**Gap-closing beats validation.** Anyone can flag an incomplete listing. Pluto works out which missing field would make the product unsearchable and asks for that specific photo, with the commercial reason attached.
+**Gap-closing beats validation.** Anyone can flag an incomplete listing. Cashew works out which missing field would make the product unsearchable and asks for that specific photo, with the commercial reason attached.
 
 **ParadeDB over a separate vector database.** BM25 lexical search and vector similarity in the same Postgres the catalogue already lives in — model numbers need exact lexical matching, descriptions need semantics, and one engine does both.
 

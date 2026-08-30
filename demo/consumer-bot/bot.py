@@ -1,4 +1,4 @@
-"""Telegram transport for the deterministic Pluto consumer demo."""
+"""Telegram transport for the deterministic Cashew consumer demo."""
 
 from __future__ import annotations
 

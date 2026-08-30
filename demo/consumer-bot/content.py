@@ -17,7 +17,7 @@ REFUND_REFERENCE = "RF-8821"
 MASKED_CARD = "Visa ···· 4242"
 SHIPPING_ADDRESS = "12 Computing Drive, Singapore 117417"
 BUDGET_REQUEST = "I want a laptop under S$1,000."
-WELCOME_TEXT = "<b>Pluto is ready</b>"
+WELCOME_TEXT = "<b>Cashew is ready</b>"
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-# Pluto Telegram consumer demo
+# Cashew Telegram consumer demo
 
 This directory (`demo/consumer-bot/`, part of the monorepo — see `AGENTS.md` here) contains the deterministic Telegram purchase flow for the
 LifeHack 2026 demo. It uses long polling and simulates Visa confirmation; it
@@ -68,7 +68,7 @@ expires:
 python mini_app/tunnel_watchdog.py
 ```
 
-Pluto reads `MINI_APP_URL` when it creates each confirmation button, so tunnel
+Cashew reads `MINI_APP_URL` when it creates each confirmation button, so tunnel
 rotation does not require a bot restart. If `MINI_APP_URL` is absent, the demo
 falls back to the existing inline callback confirmation. On a successful native
 biometric result, the Mini App sends a `web_app_data` service message to the bot;

@@ -1,4 +1,4 @@
-# Market research — the case for Pluto
+# Market research — the case for Cashew
 
 Research for the 2026-08-30 pitch. All figures sourced; reliability graded at the end.
 
@@ -14,7 +14,7 @@ The real pain — the one with urgency, numbers and a deadline — is on the mer
 
 > **AI agents are becoming the storefront. Agents read structured product data, not shopfronts. 99% of Singapore's businesses are SMEs, and almost none of them have that data. The shift to agentic commerce is about to make them invisible.**
 
-That reframes Pluto from "a nicer way to shop" (crowded, incremental) to "the on-ramp that keeps 356,600 Singapore businesses visible in the next era of commerce" (urgent, defensible, and something Visa specifically cares about).
+That reframes Cashew from "a nicer way to shop" (crowded, incremental) to "the on-ramp that keeps 356,600 Singapore businesses visible in the next era of commerce" (urgent, defensible, and something Visa specifically cares about).
 
 The consumer chat is then not the product — it is the *proof* that a merchant who onboards in five minutes actually gets found and paid.
 
@@ -46,7 +46,7 @@ This is the mechanism, and it is what makes the merchant problem urgent rather t
 
 **The line:** "An agent doesn't rank you lower for bad data. It doesn't see you at all."
 
-This is also the justification for the photo-gap-closing feature — Pluto chasing a model number off a turned-away label is not a gimmick, it is the difference between an 80% record and a 95% one.
+This is also the justification for the photo-gap-closing feature — Cashew chasing a model number off a turned-away label is not a gimmick, it is the difference between an 80% record and a 95% one.
 
 ## 3. SMEs cannot fix this themselves
 
@@ -91,7 +91,7 @@ Enough to answer "why Telegram?" in one sentence, but don't spend pitch time her
 They serve merchants who already have structured catalogues. The 94.7% of SMEs with no IT staff are exactly who marketplace onboarding already fails. Our wedge is the onboarding cost, not the marketplace.
 
 **"Five minutes of talking can't produce good product data."**
-Correct, on its own. That's why Pluto closes gaps — asks for the label shot, the connector shot — and shows the merchant their ranking with a reason to come back. Point at the 80%-vs-95% threshold: we're engineering for the number that decides visibility.
+Correct, on its own. That's why Cashew closes gaps — asks for the label shot, the connector shot — and shows the merchant their ranking with a reason to come back. Point at the 80%-vs-95% threshold: we're engineering for the number that decides visibility.
 
 **"Why would a merchant let an agent transact for them?"**
 Standing rules set during onboarding — price floor, return policy, mandatory disclosures — stated to the shopper before payment, plus instant notification on every sale. Consent sits with the shopper at confirm.

@@ -25,7 +25,7 @@ def log(message: str) -> None:
 
 
 def public_app_is_healthy(url: str) -> bool:
-    request = urllib.request.Request(url, headers={"User-Agent": "PlutoHealthCheck/1"})
+    request = urllib.request.Request(url, headers={"User-Agent": "CashewHealthCheck/1"})
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             return response.status == 200

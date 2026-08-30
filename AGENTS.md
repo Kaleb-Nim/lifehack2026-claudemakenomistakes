@@ -33,7 +33,7 @@ One-liner: let SMEs deploy pre-built, category-trained AI commerce agents on the
 
 **`docs/CANONICAL-DEMO-DATA.md` is the single source of truth for the product name, the merchant, the catalogue, prices and the dashboard figures.** All four surfaces (merchant onboarding, consumer bot, payments dashboard, videos) must match it. Change it there first, then tell the other owners.
 
-In short: the product is **Pluto**. The merchant is **Bizgram Asia Pte Ltd**, #05-50 Sim Lim Square — **one outlet only**. The spine product that must appear identically in onboarding, the consumer purchase and the dashboard feed is the **ASUS Vivobook 15 (X1504VA) at $849**. Retired names: Ah Seng / Hock Seng / Nova Electronics, and any Bugis / Jurong / Bedok outlet.
+In short: the product is **Cashew**. The merchant is **Bizgram Asia Pte Ltd**, #05-50 Sim Lim Square — **one outlet only**. The spine product that must appear identically in onboarding, the consumer purchase and the dashboard feed is the **ASUS Vivobook 15 (X1504VA) at $849**. Retired names: Ah Seng / Hock Seng / Nova Electronics, and any Bugis / Jurong / Bedok outlet.
 
 # Current direction (2026-08-29) — from the Visa mentor conversation and the team huddle after it
 

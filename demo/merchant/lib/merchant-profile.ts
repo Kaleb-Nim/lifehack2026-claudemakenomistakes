@@ -1,7 +1,7 @@
 // Canonical merchant identity — see docs/CANONICAL-DEMO-DATA.md.
 // ONE outlet. No branch filter, no outlet column, no inter-outlet transfers.
 export const MERCHANT = {
-  product: "Pluto",
+  product: "Cashew",
   name: "Bizgram Asia",
   legalName: "Bizgram Asia Pte Ltd",
   // Case-insensitive substring used to match rows in the orders table,

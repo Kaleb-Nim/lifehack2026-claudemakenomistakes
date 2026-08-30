@@ -2,13 +2,13 @@
 
 **Every surface must match this file.** Merchant onboarding (`demo/merchant`), consumer bot (`demo/consumer-bot`), the merchant payments dashboard (Claude Design), the pitch video and the demo video all draw their names, products and prices from here. If you need to change one, change it here first and tell the other owners.
 
-Last updated 2026-08-29. (Product name set to **Cashew** — the repo-wide rename; §1 previously said Pluto.)
+Last updated 2026-08-30.
 
 ---
 
 ## 1. Product name
 
-**Cashew.** Everywhere, including the agent's own voice ("Hi Cashew, help me list my products"). Never `[PRODUCT NAME]`, never `Pluto`, never any other spelling.
+**Cashew.** Everywhere, including the agent's own voice ("Hi Cashew, help me list my products"). Never `[PRODUCT NAME]`, never `Cashew`, never any other spelling.
 
 ## 2. The merchant
 
