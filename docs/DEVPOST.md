@@ -2,7 +2,7 @@
 
 ![The team building Pluto through the night at LifeHack 2026](team-build.jpg)
 
-**The onboarding layer that makes small shops findable by AI agents.**
+**AI powered dual interface engine that makes onboarding of merchants & consumers seemless**
 
 LifeHack 2026 · NUS School of Computing · Visa Digital Payments track
 
@@ -16,24 +16,22 @@ LifeHack 2026 · NUS School of Computing · Visa Digital Payments track
 
 ## The Problem
 
-Every solution built for SME e-commerce assumes the merchant already has a catalogue. Shopify onboarding, marketplace listings, product feed tools — they all start from structured data the merchant is expected to already have.
+We realised early on into our build that for agentic commerce to pick up and go big there not only needs to be a solution that is consumer focused but also small medium size merchant focused too. Every solution built for SME e-commerce assumes the merchant already has a structured catalogue. Such as Shopify onboarding, marketplace listings, product feed tools.
 
 **Bizgram Asia** has traded from #05-50 Sim Lim Square since 2003. They list **26,512 products** on the Sim Lim Square portal and describe **"over 10,000 SKUs"** on their own site.
 
-**Not one of them has a public price.** To find out what anything costs, you WhatsApp them and they send back a PDF price list they re-upload every single day.
-
-Ask any AI assistant for a laptop in Singapore today. It will never send you to Bizgram. Not because they're expensive, or out of stock, or badly reviewed — but because there is nothing there a machine can read.
+**Not one of them has a public price.** To find out what anything costs, you WhatsApp them and they send back a PDF price list they re-upload every single day. This makes purchasing from these electronics outlets not just unappealing for daily consumers but also for AI agents. Ask it for laptops and it will never send you to Bizgram not because they're expensive, or out of stock, or badly reviewed, but because there is nothing there for agentic systems to pick up and display. 
 
 <!-- PHOTO 2 — Sim Lim Square shopfront, the unit sign, or the real Bizgram
      listing on screen. Grounds the whole pitch in something verifiable. -->
 
-## Why This Is About To Get Much Worse
+## Why We Believe This Is About To Get Much Worse
 
 Agentic commerce is not a forecast any more. **AI traffic to retailers grew 393% year-on-year in Q1 2026** (Adobe Analytics). By 2030, roughly half of online shoppers are expected to buy through an agent.
 
 And agents do not browse. They **skip**.
 
-An AI shopping agent reads structured product feeds, not shopfronts. If a field it needs is missing, it does not guess — guessing means buying the wrong thing on someone's card. It moves to a competitor whose data answers the question. Below roughly an 80% attribute fill rate, products are routinely skipped entirely.
+An AI shopping agent reads structured product feeds, not shopfronts. If a field it needs is missing, it moves to a competitor whose data has better structured answers for it. Below roughly an 80% attribute fill rate, products are routinely skipped entirely.
 
 So the shift to agentic commerce does not rank small shops lower. **It makes them invisible.**
 
@@ -41,7 +39,7 @@ In Singapore that is **356,600 SMEs — 99% of all businesses, ~70% of the workf
 
 ## Our Solution
 
-**Pluto is the five-minute on-ramp.** A merchant talks to a voice agent. No dashboard, no forms, no CSV templates.
+**Pluto is the five-minute on-ramp.** A merchant converses to a voice agent. No dashboard, no forms, no CSV templates.
 
 Pluto researches the shop from nothing but its name, reads whatever the merchant uploads — photos, a PDF price list, a WhatsApp screenshot of a supplier sheet — and asks only for what it genuinely cannot work out. Then the shop is live inside a category agent that shoppers talk to on Telegram, with checkout settled in-chat on Visa.
 
